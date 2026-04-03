@@ -106,7 +106,7 @@ if ! verify_torch_stack; then
       echo "Expected virtualenv python not found at ${VENV_PY}" >&2
       exit 1
     fi
-    uv pip uninstall --python "${VENV_PY}" -y torch torchvision || true
+    uv pip uninstall --python "${VENV_PY}" torch torchvision || true
     uv pip install --python "${VENV_PY}" \
       --index-url "https://download.pytorch.org/whl/${GPU_WHEEL_TAG}" \
       "torch==${GPU_TORCH_VERSION}+${GPU_WHEEL_TAG}" \
