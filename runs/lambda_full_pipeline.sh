@@ -11,7 +11,7 @@ set -euo pipefail
 #   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/lambda_full_pipeline.sh
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
 #   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
-#   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=0 FLASH_ATTN_FORCE_BUILD=0 bash runs/lambda_full_pipeline.sh
+#   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=1 FLASH_ATTN_FORCE_BUILD=1 bash runs/lambda_full_pipeline.sh
 
 REPO_DIR="${REPO_DIR:-$(pwd)}"
 UPDATE_REPO="${UPDATE_REPO:-0}"
@@ -25,8 +25,8 @@ GPU_WHEEL_TAG="${GPU_WHEEL_TAG:-auto}" # auto|cu128|cu130|...
 GPU_TORCH_VERSION="${GPU_TORCH_VERSION:-2.11.0}"
 GPU_TORCHVISION_VERSION="${GPU_TORCHVISION_VERSION:-0.26.0}"
 INSTALL_FLASH_ATTN="${INSTALL_FLASH_ATTN:-1}"
-STRICT_FLASH_ATTN="${STRICT_FLASH_ATTN:-0}"
-FLASH_ATTN_FORCE_BUILD="${FLASH_ATTN_FORCE_BUILD:-0}"
+STRICT_FLASH_ATTN="${STRICT_FLASH_ATTN:-1}"
+FLASH_ATTN_FORCE_BUILD="${FLASH_ATTN_FORCE_BUILD:-1}"
 FLASH_ATTN_VERSION="${FLASH_ATTN_VERSION:-}" # optional pin, e.g. 2.8.3
 FLASH_ATTN_MAX_JOBS="${FLASH_ATTN_MAX_JOBS:-8}"
 
@@ -61,6 +61,7 @@ RUN_TAG="${RUN_TAG:-$(date +%Y%m%d_%H%M%S)}"
 DATA_DIR="${DATA_DIR:-data/agml_sft_${RUN_TAG}}"
 RUN_DIR="${RUN_DIR:-runs/sft_${RUN_TAG}}"
 LOG_DIR="${LOG_DIR:-${RUN_DIR}/logs}"
+FLASH_ATTN_LOG="${LOG_DIR}/flash_attn_install.log"
 
 mkdir -p "${LOG_DIR}"
 cd "${REPO_DIR}"
@@ -127,15 +128,40 @@ try_install_flash_attn() {
     pkg="flash-attn==${FLASH_ATTN_VERSION}"
   fi
 
-  if [[ "${FLASH_ATTN_FORCE_BUILD}" == "1" ]]; then
-    MAX_JOBS="${FLASH_ATTN_MAX_JOBS}" uv pip install \
-      --python "${VENV_PY}" \
-      --no-build-isolation \
-      "${pkg}"
-    return $?
+  : > "${FLASH_ATTN_LOG}"
+  echo "Installing ${pkg} (wheel-first strategy) ..." | tee -a "${FLASH_ATTN_LOG}"
+
+  if uv pip install --python "${VENV_PY}" "${pkg}" >>"${FLASH_ATTN_LOG}" 2>&1; then
+    return 0
   fi
 
-  uv pip install --python "${VENV_PY}" "${pkg}"
+  echo "Wheel install failed. See ${FLASH_ATTN_LOG}" | tee -a "${FLASH_ATTN_LOG}"
+  if [[ "${FLASH_ATTN_FORCE_BUILD}" != "1" ]]; then
+    return 1
+  fi
+
+  echo "Trying source build with --no-build-isolation ..." | tee -a "${FLASH_ATTN_LOG}"
+  uv pip install --python "${VENV_PY}" -U ninja packaging setuptools wheel psutil >>"${FLASH_ATTN_LOG}" 2>&1 || true
+  if MAX_JOBS="${FLASH_ATTN_MAX_JOBS}" uv pip install \
+    --python "${VENV_PY}" \
+    --no-build-isolation \
+    --force-reinstall \
+    "${pkg}" >>"${FLASH_ATTN_LOG}" 2>&1; then
+    return 0
+  fi
+
+  echo "Source build failed. See ${FLASH_ATTN_LOG}" | tee -a "${FLASH_ATTN_LOG}"
+  return 1
+}
+
+flash_attn_version() {
+  "${VENV_PY}" - <<'PY'
+try:
+    import flash_attn
+    print(getattr(flash_attn, "__version__", "unknown"))
+except Exception:
+    print("")
+PY
 }
 
 detect_cuda_wheel_tag_from_torch() {
@@ -188,13 +214,13 @@ if [[ "${NO_FLASH_ATTN}" != "1" ]]; then
   echo "[4b/7] Checking flash-attn availability"
   FLASH_PRESENT="$(is_flash_attn_installed)"
   if [[ "${FLASH_PRESENT}" == "1" ]]; then
-    echo "flash-attn already installed."
+    echo "flash-attn already installed (version: $(flash_attn_version))."
   elif [[ "${INSTALL_FLASH_ATTN}" == "1" ]]; then
     echo "flash-attn not found; attempting installation ..."
     if try_install_flash_attn; then
       FLASH_PRESENT="$(is_flash_attn_installed)"
       if [[ "${FLASH_PRESENT}" == "1" ]]; then
-        echo "flash-attn installation succeeded."
+        echo "flash-attn installation succeeded (version: $(flash_attn_version))."
       fi
     fi
   fi
@@ -202,6 +228,10 @@ if [[ "${NO_FLASH_ATTN}" != "1" ]]; then
   if [[ "${FLASH_PRESENT}" != "1" ]]; then
     if [[ "${STRICT_FLASH_ATTN}" == "1" ]]; then
       echo "flash-attn is required (STRICT_FLASH_ATTN=1) but is not installed." >&2
+      if [[ -f "${FLASH_ATTN_LOG}" ]]; then
+        echo "--- tail ${FLASH_ATTN_LOG} ---" >&2
+        tail -n 80 "${FLASH_ATTN_LOG}" >&2 || true
+      fi
       exit 1
     fi
     echo "flash-attn unavailable; training will use SDPA fallback."
@@ -273,6 +303,13 @@ if [[ "${NO_FLASH_ATTN}" == "1" ]]; then
 fi
 
 "${TRAIN_CMD[@]}" 2>&1 | tee "${LOG_DIR}/train.log"
+
+if [[ "${NO_FLASH_ATTN}" != "1" && "${STRICT_FLASH_ATTN}" == "1" ]]; then
+  if ! grep -q "attention implementation 'flash_attention_2'" "${LOG_DIR}/train.log"; then
+    echo "Expected flash_attention_2 but training did not use it. See ${LOG_DIR}/train.log" >&2
+    exit 1
+  fi
+fi
 
 FINAL_MODEL_DIR="${RUN_DIR}/final"
 if [[ ! -d "${FINAL_MODEL_DIR}" ]]; then
