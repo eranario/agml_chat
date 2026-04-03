@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.rpt2_cache/
+runs/*/checkpoint-*/
+runs/*/final/
+data/agml_sft/

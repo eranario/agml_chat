@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>agml-chat</title>
+  <style>
+    :root {
+      --bg: linear-gradient(145deg, #f7f3ea 0%, #e7efe3 100%);
+      --card: #ffffff;
+      --ink: #1f2a1f;
+      --muted: #5f6d5f;
+      --accent: #2f6f3e;
+      --accent-2: #7e4c2f;
+      --border: #d5dfcf;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(6px);
+    }
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0.02em;
+      text-transform: lowercase;
+    }
+    .badge {
+      background: #e8efe5;
+      color: var(--accent);
+      border: 1px solid #c9d8c5;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    main {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 14px;
+      flex: 1;
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 6px 20px rgba(30, 70, 40, 0.06);
+    }
+    .panel h2 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+    input[type="range"], textarea, input[type="file"], button {
+      width: 100%;
+      margin-top: 6px;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 84px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      font: inherit;
+      background: #fcfdfb;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    button.secondary {
+      background: #fff7f2;
+      color: var(--accent-2);
+      border-color: #e8c7b3;
+    }
+    .chat {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: auto;
+      max-height: calc(100vh - 170px);
+      padding-right: 6px;
+    }
+    .msg {
+      padding: 10px 12px;
+      border-radius: 12px;
+      white-space: pre-wrap;
+      line-height: 1.45;
+      border: 1px solid var(--border);
+      background: #fafcf9;
+    }
+    .msg.user {
+      background: #f2f8ef;
+      border-color: #cddfca;
+      margin-left: 70px;
+    }
+    .msg.assistant {
+      background: #fff;
+      margin-right: 70px;
+    }
+    .preview {
+      margin-top: 8px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      max-height: 180px;
+      display: none;
+    }
+    .preview img {
+      width: 100%;
+      display: block;
+    }
+    .tiny {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .chat { max-height: none; }
+      .msg.user, .msg.assistant { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>agml-chat</h1>
+    <span class="badge">nanochat-style multimodal</span>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Controls</h2>
+      <label>
+        Prompt
+        <textarea id="prompt" placeholder="Ask about the crop image, disease, or class label..."></textarea>
+      </label>
+
+      <label>
+        Image (optional)
+        <input id="imageInput" type="file" accept="image/*" />
+      </label>
+      <div class="preview" id="preview"><img id="previewImg" alt="preview" /></div>
+
+      <label>
+        Temperature <span id="tempVal">0.2</span>
+        <input id="temperature" type="range" min="0" max="1.5" step="0.05" value="0.2" />
+      </label>
+
+      <label>
+        Max New Tokens <span id="maxTokensVal">256</span>
+        <input id="maxTokens" type="range" min="32" max="1024" step="32" value="256" />
+      </label>
+
+      <label>
+        <input id="researchMode" type="checkbox" /> Enable research mode
+      </label>
+
+      <div class="actions">
+        <button class="primary" id="sendBtn">Send</button>
+        <button class="secondary" id="newBtn">New Chat</button>
+      </div>
+      <div class="tiny">Research mode runs a multi-pass answer strategy for deeper analysis.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Chat</h2>
+      <div id="chat" class="chat"></div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      messages: [],
+      imageDataUrl: null,
+      busy: false,
+    };
+
+    const chatEl = document.getElementById('chat');
+    const promptEl = document.getElementById('prompt');
+    const imageInputEl = document.getElementById('imageInput');
+    const previewEl = document.getElementById('preview');
+    const previewImgEl = document.getElementById('previewImg');
+    const sendBtnEl = document.getElementById('sendBtn');
+    const newBtnEl = document.getElementById('newBtn');
+    const tempEl = document.getElementById('temperature');
+    const maxTokensEl = document.getElementById('maxTokens');
+    const tempValEl = document.getElementById('tempVal');
+    const maxTokensValEl = document.getElementById('maxTokensVal');
+    const researchModeEl = document.getElementById('researchMode');
+
+    function addMessage(role, content) {
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.textContent = content;
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      return div;
+    }
+
+    function resetChat() {
+      state.messages = [];
+      chatEl.innerHTML = '';
+      promptEl.value = '';
+      imageInputEl.value = '';
+      state.imageDataUrl = null;
+      previewEl.style.display = 'none';
+    }
+
+    tempEl.addEventListener('input', () => {
+      tempValEl.textContent = tempEl.value;
+    });
+
+    maxTokensEl.addEventListener('input', () => {
+      maxTokensValEl.textContent = maxTokensEl.value;
+    });
+
+    imageInputEl.addEventListener('change', async () => {
+      const file = imageInputEl.files[0];
+      if (!file) {
+        state.imageDataUrl = null;
+        previewEl.style.display = 'none';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.imageDataUrl = reader.result;
+        previewImgEl.src = reader.result;
+        previewEl.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    });
+
+    async function streamChat() {
+      if (state.busy) return;
+      const prompt = promptEl.value.trim();
+      if (!prompt) return;
+
+      state.busy = true;
+      sendBtnEl.disabled = true;
+
+      state.messages.push({ role: 'user', content: prompt });
+      addMessage('user', prompt);
+      promptEl.value = '';
+
+      const assistantBubble = addMessage('assistant', '');
+
+      try {
+        const response = await fetch('/chat/completions/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: state.messages,
+            image_data_url: state.imageDataUrl,
+            temperature: Number(tempEl.value),
+            max_new_tokens: Number(maxTokensEl.value),
+            top_p: 0.95,
+            research_mode: researchModeEl.checked,
+          }),
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop();
+
+          for (const event of events) {
+            if (!event.startsWith('data: ')) continue;
+            const payload = JSON.parse(event.slice(6));
+            if (payload.done) {
+              state.messages.push({ role: 'assistant', content: assistantBubble.textContent });
+              continue;
+            }
+            if (payload.token) {
+              assistantBubble.textContent += payload.token;
+              chatEl.scrollTop = chatEl.scrollHeight;
+            }
+          }
+        }
+      } catch (err) {
+        assistantBubble.textContent = `Request failed: ${err}`;
+      } finally {
+        state.busy = false;
+        sendBtnEl.disabled = false;
+      }
+    }
+
+    sendBtnEl.addEventListener('click', streamChat);
+    newBtnEl.addEventListener('click', resetChat);
+    promptEl.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        streamChat();
+      }
+    });
+  </script>
+</body>
+</html>
