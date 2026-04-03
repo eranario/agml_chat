@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+from inspect import signature
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
 from transformers import Trainer, TrainingArguments
+from transformers import __version__ as transformers_version
 
 from agml_chat.chat_template_adapter import (
     ModelFamily,
@@ -105,6 +107,36 @@ class VisionLanguageSFTCollator:
         return batch
 
 
+def _build_training_arguments(**kwargs: Any) -> TrainingArguments:
+    """
+    Build TrainingArguments across transformers versions by:
+    - mapping renamed params (`evaluation_strategy` <-> `eval_strategy`)
+    - dropping unsupported params with a warning
+    """
+    params = signature(TrainingArguments.__init__).parameters
+    resolved: dict[str, Any] = {}
+
+    for key, value in kwargs.items():
+        if key in params:
+            resolved[key] = value
+            continue
+
+        if key == "evaluation_strategy" and "eval_strategy" in params:
+            resolved["eval_strategy"] = value
+            continue
+        if key == "eval_strategy" and "evaluation_strategy" in params:
+            resolved["evaluation_strategy"] = value
+            continue
+
+        logging.warning(
+            "Dropping unsupported TrainingArguments param '%s' for transformers %s.",
+            key,
+            transformers_version,
+        )
+
+    return TrainingArguments(**resolved)
+
+
 
 def run_training(config: TrainConfig) -> None:
     configure_logging()
@@ -153,7 +185,7 @@ def run_training(config: TrainConfig) -> None:
     report_to = []
     eval_strategy = "steps" if eval_dataset is not None else "no"
 
-    training_args = TrainingArguments(
+    training_args = _build_training_arguments(
         output_dir=config.output_dir,
         overwrite_output_dir=False,
         per_device_train_batch_size=config.per_device_train_batch_size,
