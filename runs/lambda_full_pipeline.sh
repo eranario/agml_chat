@@ -28,8 +28,11 @@ INSTALL_FLASH_ATTN="${INSTALL_FLASH_ATTN:-1}"
 STRICT_FLASH_ATTN="${STRICT_FLASH_ATTN:-1}"
 FLASH_ATTN_FORCE_BUILD="${FLASH_ATTN_FORCE_BUILD:-1}"
 FLASH_ATTN_VERSION="${FLASH_ATTN_VERSION:-}" # optional pin, e.g. 2.8.3
-FLASH_ATTN_MAX_JOBS="${FLASH_ATTN_MAX_JOBS:-8}"
+FLASH_ATTN_MAX_JOBS="${FLASH_ATTN_MAX_JOBS:-4}"
 FLASH_ATTN_NO_DEPS="${FLASH_ATTN_NO_DEPS:-1}"
+FLASH_ATTN_NVCC_THREADS="${FLASH_ATTN_NVCC_THREADS:-1}"
+FLASH_ATTN_TORCH_CUDA_ARCH_LIST="${FLASH_ATTN_TORCH_CUDA_ARCH_LIST:-9.0}"
+FLASH_ATTN_RETRY_MINIMAL="${FLASH_ATTN_RETRY_MINIMAL:-1}"
 
 # Split defaults are train-only to keep the path robust if you evaluate elsewhere.
 TRAIN_RATIO="${TRAIN_RATIO:-1.0}"
@@ -141,6 +144,7 @@ try_install_flash_attn() {
   fi
 
   echo "Trying source build with --no-build-isolation ..." | tee -a "${FLASH_ATTN_LOG}"
+  echo "Build env: MAX_JOBS=${FLASH_ATTN_MAX_JOBS} NVCC_THREADS=${FLASH_ATTN_NVCC_THREADS} TORCH_CUDA_ARCH_LIST=${FLASH_ATTN_TORCH_CUDA_ARCH_LIST}" | tee -a "${FLASH_ATTN_LOG}"
   uv pip install --python "${VENV_PY}" -U ninja packaging setuptools wheel psutil >>"${FLASH_ATTN_LOG}" 2>&1 || true
   local -a source_cmd
   source_cmd=(
@@ -154,8 +158,21 @@ try_install_flash_attn() {
   fi
   source_cmd+=("${pkg}")
 
-  if MAX_JOBS="${FLASH_ATTN_MAX_JOBS}" "${source_cmd[@]}" >>"${FLASH_ATTN_LOG}" 2>&1; then
+  if MAX_JOBS="${FLASH_ATTN_MAX_JOBS}" \
+    NVCC_THREADS="${FLASH_ATTN_NVCC_THREADS}" \
+    TORCH_CUDA_ARCH_LIST="${FLASH_ATTN_TORCH_CUDA_ARCH_LIST}" \
+    "${source_cmd[@]}" >>"${FLASH_ATTN_LOG}" 2>&1; then
     return 0
+  fi
+
+  if [[ "${FLASH_ATTN_RETRY_MINIMAL}" == "1" ]]; then
+    echo "Retrying source build with minimal parallelism ..." | tee -a "${FLASH_ATTN_LOG}"
+    if MAX_JOBS="1" \
+      NVCC_THREADS="1" \
+      TORCH_CUDA_ARCH_LIST="${FLASH_ATTN_TORCH_CUDA_ARCH_LIST}" \
+      "${source_cmd[@]}" >>"${FLASH_ATTN_LOG}" 2>&1; then
+      return 0
+    fi
   fi
 
   echo "Source build failed. See ${FLASH_ATTN_LOG}" | tee -a "${FLASH_ATTN_LOG}"
