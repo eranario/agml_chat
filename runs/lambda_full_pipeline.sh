@@ -101,7 +101,13 @@ if ! verify_torch_stack; then
   echo "Torch/Torchvision runtime check failed."
   if [[ "${AUTO_FIX_TORCH_STACK}" == "1" ]]; then
     echo "Attempting repair with matching CUDA wheels (${GPU_WHEEL_TAG}) ..."
-    uv run python -m pip install --upgrade --force-reinstall \
+    VENV_PY="${REPO_DIR}/.venv/bin/python"
+    if [[ ! -x "${VENV_PY}" ]]; then
+      echo "Expected virtualenv python not found at ${VENV_PY}" >&2
+      exit 1
+    fi
+    uv pip uninstall --python "${VENV_PY}" -y torch torchvision || true
+    uv pip install --python "${VENV_PY}" \
       --index-url "https://download.pytorch.org/whl/${GPU_WHEEL_TAG}" \
       "torch==${GPU_TORCH_VERSION}+${GPU_WHEEL_TAG}" \
       "torchvision==${GPU_TORCHVISION_VERSION}+${GPU_WHEEL_TAG}"
