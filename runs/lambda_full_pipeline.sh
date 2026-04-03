@@ -10,6 +10,7 @@ set -euo pipefail
 #   MODEL="Qwen/Qwen2.5-VL-3B-Instruct" DATASETS="plant_village_classification" bash runs/lambda_full_pipeline.sh
 #   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/lambda_full_pipeline.sh
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
+#   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=cu128 GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
 
 REPO_DIR="${REPO_DIR:-$(pwd)}"
 UPDATE_REPO="${UPDATE_REPO:-0}"
@@ -18,6 +19,10 @@ LOCK_MODE="${LOCK_MODE:-frozen}" # frozen|refresh
 MODEL="${MODEL:-Qwen/Qwen2.5-VL-3B-Instruct}"
 DATASETS="${DATASETS:-plant_village_classification}"
 PROMPT_CONFIG="${PROMPT_CONFIG:-configs/prompt_config.example.yaml}"
+AUTO_FIX_TORCH_STACK="${AUTO_FIX_TORCH_STACK:-1}"
+GPU_WHEEL_TAG="${GPU_WHEEL_TAG:-cu128}"
+GPU_TORCH_VERSION="${GPU_TORCH_VERSION:-2.11.0}"
+GPU_TORCHVISION_VERSION="${GPU_TORCHVISION_VERSION:-0.26.0}"
 
 # Split defaults are train-only to keep the path robust if you evaluate elsewhere.
 TRAIN_RATIO="${TRAIN_RATIO:-1.0}"
@@ -84,11 +89,28 @@ else
 fi
 
 echo "[4/7] Verifying runtime deps (torch/torchvision)"
-uv run python - <<'PY'
+verify_torch_stack() {
+  uv run python - <<'PY'
 import torch
 import torchvision
 print(f"torch={torch.__version__} torchvision={torchvision.__version__} cuda={torch.cuda.is_available()}")
 PY
+}
+
+if ! verify_torch_stack; then
+  echo "Torch/Torchvision runtime check failed."
+  if [[ "${AUTO_FIX_TORCH_STACK}" == "1" ]]; then
+    echo "Attempting repair with matching CUDA wheels (${GPU_WHEEL_TAG}) ..."
+    uv run python -m pip install --upgrade --force-reinstall \
+      --index-url "https://download.pytorch.org/whl/${GPU_WHEEL_TAG}" \
+      "torch==${GPU_TORCH_VERSION}+${GPU_WHEEL_TAG}" \
+      "torchvision==${GPU_TORCHVISION_VERSION}+${GPU_WHEEL_TAG}"
+    verify_torch_stack
+  else
+    echo "Set AUTO_FIX_TORCH_STACK=1 to auto-repair torch/torchvision mismatch." >&2
+    exit 1
+  fi
+fi
 
 if [[ ! -f "${PROMPT_CONFIG}" ]]; then
   echo "Prompt config not found: ${PROMPT_CONFIG}" >&2
