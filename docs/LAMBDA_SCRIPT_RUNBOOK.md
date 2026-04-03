@@ -10,6 +10,47 @@ git pull
 rm -rf .venv
 ```
 
+## 1b) Environment already set up (fast rerun)
+
+Use this when `.venv` already exists and you just want to rerun training.
+
+Strict FlashAttention (fails if not active):
+
+```bash
+cd ~/agml_chat
+git pull
+LOCK_MODE=frozen \
+AUTO_FIX_TORCH_STACK=1 \
+GPU_WHEEL_TAG=auto \
+INSTALL_FLASH_ATTN=1 \
+FLASH_ATTN_FORCE_BUILD=1 \
+FLASH_ATTN_NO_DEPS=1 \
+STRICT_FLASH_ATTN=1 \
+FLASH_ATTN_MAX_JOBS=1 \
+FLASH_ATTN_NVCC_THREADS=1 \
+FLASH_ATTN_TORCH_CUDA_ARCH_LIST=9.0 \
+FLASH_ATTN_RETRY_MINIMAL=1 \
+bash runs/lambda_full_pipeline.sh
+```
+
+Allow fallback to SDPA:
+
+```bash
+cd ~/agml_chat
+git pull
+LOCK_MODE=frozen \
+AUTO_FIX_TORCH_STACK=1 \
+GPU_WHEEL_TAG=auto \
+INSTALL_FLASH_ATTN=1 \
+FLASH_ATTN_FORCE_BUILD=1 \
+FLASH_ATTN_NO_DEPS=1 \
+STRICT_FLASH_ATTN=0 \
+FLASH_ATTN_MAX_JOBS=1 \
+FLASH_ATTN_NVCC_THREADS=1 \
+FLASH_ATTN_TORCH_CUDA_ARCH_LIST=9.0 \
+bash runs/lambda_full_pipeline.sh
+```
+
 ## 2) Strict FlashAttention run (fail if FlashAttention is not active)
 
 ```bash
