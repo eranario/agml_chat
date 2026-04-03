@@ -33,16 +33,17 @@ MAX_SAMPLES_PER_DATASET="${MAX_SAMPLES_PER_DATASET:-}"
 
 EPOCHS="${EPOCHS:-1}"
 PER_DEVICE_TRAIN_BATCH_SIZE="${PER_DEVICE_TRAIN_BATCH_SIZE:-1}"
-PER_DEVICE_EVAL_BATCH_SIZE="${PER_DEVICE_EVAL_BATCH_SIZE:-1}"
 GRAD_ACCUM="${GRAD_ACCUM:-8}"
 LOGGING_STEPS="${LOGGING_STEPS:-5}"
 SAVE_STEPS="${SAVE_STEPS:-100}"
-EVAL_STEPS="${EVAL_STEPS:-100}"
 MAX_LENGTH="${MAX_LENGTH:-2048}"
 LEARNING_RATE="${LEARNING_RATE:-2e-5}"
 WARMUP_RATIO="${WARMUP_RATIO:-0.03}"
 
 NO_LORA="${NO_LORA:-0}"
+LORA_R="${LORA_R:-16}"
+LORA_ALPHA="${LORA_ALPHA:-32}"
+LORA_DROPOUT="${LORA_DROPOUT:-0.05}"
 LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-}"
 NO_FLASH_ATTN="${NO_FLASH_ATTN:-0}"
 
@@ -176,7 +177,6 @@ fi
 "${PREP_CMD[@]}" | tee "${LOG_DIR}/prepare.log"
 
 TRAIN_JSONL="${DATA_DIR}/train.jsonl"
-VAL_JSONL="${DATA_DIR}/val.jsonl"
 
 if [[ ! -f "${TRAIN_JSONL}" ]]; then
   echo "train.jsonl was not generated at ${TRAIN_JSONL}" >&2
@@ -194,19 +194,16 @@ TRAIN_CMD=(
   --device cuda
   --epochs "${EPOCHS}"
   --per-device-train-batch-size "${PER_DEVICE_TRAIN_BATCH_SIZE}"
-  --per-device-eval-batch-size "${PER_DEVICE_EVAL_BATCH_SIZE}"
   --gradient-accumulation-steps "${GRAD_ACCUM}"
   --logging-steps "${LOGGING_STEPS}"
   --save-steps "${SAVE_STEPS}"
-  --eval-steps "${EVAL_STEPS}"
   --max-length "${MAX_LENGTH}"
   --learning-rate "${LEARNING_RATE}"
   --warmup-ratio "${WARMUP_RATIO}"
+  --lora-r "${LORA_R}"
+  --lora-alpha "${LORA_ALPHA}"
+  --lora-dropout "${LORA_DROPOUT}"
 )
-
-if [[ -f "${VAL_JSONL}" ]]; then
-  TRAIN_CMD+=(--val-jsonl "${VAL_JSONL}")
-fi
 
 if [[ "${NO_LORA}" == "1" ]]; then
   TRAIN_CMD+=(--no-lora)
