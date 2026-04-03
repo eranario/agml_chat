@@ -10,7 +10,7 @@ set -euo pipefail
 #   MODEL="Qwen/Qwen2.5-VL-3B-Instruct" DATASETS="plant_village_classification" bash runs/lambda_full_pipeline.sh
 #   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/lambda_full_pipeline.sh
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
-#   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=cu128 GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
+#   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
 
 REPO_DIR="${REPO_DIR:-$(pwd)}"
 UPDATE_REPO="${UPDATE_REPO:-0}"
@@ -20,7 +20,7 @@ MODEL="${MODEL:-Qwen/Qwen2.5-VL-3B-Instruct}"
 DATASETS="${DATASETS:-plant_village_classification}"
 PROMPT_CONFIG="${PROMPT_CONFIG:-configs/prompt_config.example.yaml}"
 AUTO_FIX_TORCH_STACK="${AUTO_FIX_TORCH_STACK:-1}"
-GPU_WHEEL_TAG="${GPU_WHEEL_TAG:-cu128}"
+GPU_WHEEL_TAG="${GPU_WHEEL_TAG:-auto}" # auto|cu128|cu130|...
 GPU_TORCH_VERSION="${GPU_TORCH_VERSION:-2.11.0}"
 GPU_TORCHVISION_VERSION="${GPU_TORCHVISION_VERSION:-0.26.0}"
 
@@ -88,29 +88,63 @@ else
   uv sync --frozen --extra gpu --group dev
 fi
 
+VENV_PY="${REPO_DIR}/.venv/bin/python"
+if [[ ! -x "${VENV_PY}" ]]; then
+  echo "Expected virtualenv python not found at ${VENV_PY}" >&2
+  exit 1
+fi
+
 echo "[4/7] Verifying runtime deps (torch/torchvision)"
 verify_torch_stack() {
-  uv run python - <<'PY'
+  "${VENV_PY}" - <<'PY'
 import torch
 import torchvision
-print(f"torch={torch.__version__} torchvision={torchvision.__version__} cuda={torch.cuda.is_available()}")
+print(
+    f"torch={torch.__version__} torch_cuda={torch.version.cuda} "
+    f"torchvision={torchvision.__version__} cuda_available={torch.cuda.is_available()}"
+)
+PY
+}
+
+detect_cuda_wheel_tag_from_torch() {
+  "${VENV_PY}" - <<'PY'
+try:
+    import torch
+except Exception:
+    print("")
+    raise SystemExit(0)
+
+cuda = torch.version.cuda
+if not cuda:
+    print("")
+else:
+    parts = cuda.split(".")
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+        print(f"cu{parts[0]}{parts[1]}")
+    else:
+        print("")
 PY
 }
 
 if ! verify_torch_stack; then
   echo "Torch/Torchvision runtime check failed."
   if [[ "${AUTO_FIX_TORCH_STACK}" == "1" ]]; then
-    echo "Attempting repair with matching CUDA wheels (${GPU_WHEEL_TAG}) ..."
-    VENV_PY="${REPO_DIR}/.venv/bin/python"
-    if [[ ! -x "${VENV_PY}" ]]; then
-      echo "Expected virtualenv python not found at ${VENV_PY}" >&2
-      exit 1
+    REPAIR_WHEEL_TAG="${GPU_WHEEL_TAG}"
+    if [[ "${REPAIR_WHEEL_TAG}" == "auto" ]]; then
+      DETECTED_TAG="$(detect_cuda_wheel_tag_from_torch || true)"
+      if [[ -n "${DETECTED_TAG}" ]]; then
+        REPAIR_WHEEL_TAG="${DETECTED_TAG}"
+      else
+        REPAIR_WHEEL_TAG="cu128"
+      fi
     fi
+
+    echo "Attempting repair with matching CUDA wheels (${REPAIR_WHEEL_TAG}) ..."
     uv pip uninstall --python "${VENV_PY}" torch torchvision || true
     uv pip install --python "${VENV_PY}" \
-      --index-url "https://download.pytorch.org/whl/${GPU_WHEEL_TAG}" \
-      "torch==${GPU_TORCH_VERSION}+${GPU_WHEEL_TAG}" \
-      "torchvision==${GPU_TORCHVISION_VERSION}+${GPU_WHEEL_TAG}"
+      --index-url "https://download.pytorch.org/whl/${REPAIR_WHEEL_TAG}" \
+      "torch==${GPU_TORCH_VERSION}+${REPAIR_WHEEL_TAG}" \
+      "torchvision==${GPU_TORCHVISION_VERSION}+${REPAIR_WHEEL_TAG}"
     verify_torch_stack
   else
     echo "Set AUTO_FIX_TORCH_STACK=1 to auto-repair torch/torchvision mismatch." >&2
@@ -125,7 +159,7 @@ fi
 
 echo "[5/7] Preparing AgML SFT dataset"
 PREP_CMD=(
-  uv run -m scripts.prepare_agml_sft
+  "${VENV_PY}" -m scripts.prepare_agml_sft
   --datasets "${DATASETS}"
   --output-dir "${DATA_DIR}"
   --prompt-config "${PROMPT_CONFIG}"
@@ -153,7 +187,7 @@ echo "[6/7] Starting fine-tuning"
 mkdir -p "${RUN_DIR}"
 
 TRAIN_CMD=(
-  uv run -m scripts.chat_sft
+  "${VENV_PY}" -m scripts.chat_sft
   --model-name "${MODEL}"
   --train-jsonl "${TRAIN_JSONL}"
   --output-dir "${RUN_DIR}"
@@ -202,7 +236,7 @@ echo "Final model: ${FINAL_MODEL_DIR}"
 
 if [[ "${START_WEB}" == "1" ]]; then
   echo "Starting web server on ${HOST}:${PORT} ..."
-  exec uv run -m scripts.chat_web \
+  exec "${VENV_PY}" -m scripts.chat_web \
     --model "${FINAL_MODEL_DIR}" \
     --host "${HOST}" \
     --port "${PORT}"
