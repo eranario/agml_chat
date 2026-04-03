@@ -47,6 +47,44 @@ class SplitRatios:
             raise ValueError(f"Split ratios must sum to 1.0, got {total}")
 
 
+_AGML_CITATION_PATCHED = False
+
+
+def _is_agml_citation_bug(exc: BaseException) -> bool:
+    return "license_more_info" in str(exc)
+
+
+def _patch_agml_citation_bug() -> bool:
+    global _AGML_CITATION_PATCHED
+    if _AGML_CITATION_PATCHED:
+        return True
+
+    try:
+        from agml.utils import data as agml_utils_data
+        from agml.utils import downloads as agml_utils_downloads
+    except Exception:
+        logging.exception("Failed to import AgML utils for citation bug patch.")
+        return False
+
+    original_copyright_print = agml_utils_data.copyright_print
+
+    def _safe_copyright_print(name: str, location: str | None = None) -> None:
+        try:
+            original_copyright_print(name, location=location)
+        except UnboundLocalError as exc:
+            if not _is_agml_citation_bug(exc):
+                raise
+            logging.warning(
+                "Suppressed AgML citation rendering bug for dataset '%s' (missing license_more_info).",
+                name,
+            )
+
+    agml_utils_data.copyright_print = _safe_copyright_print
+    agml_utils_downloads.copyright_print = _safe_copyright_print
+    _AGML_CITATION_PATCHED = True
+    return True
+
+
 
 def list_classification_datasets(min_images: int = 0) -> list[AgMLDatasetInfo]:
     datasets = public_data_sources(ml_task="image_classification")
@@ -86,19 +124,17 @@ def _create_agml_loader(dataset_name: str, dataset_path: str | None = None) -> A
         return AgMLDataLoader(dataset_name, **loader_kwargs)
     except UnboundLocalError as exc:
         # Work around an upstream AgML bug triggered by some dataset citation metadata.
-        if "license_more_info" not in str(exc):
-            raise
-
-        fallback_root = _resolve_local_dataset_root(dataset_name, dataset_path=dataset_path)
-        if not fallback_root.exists():
+        if not _is_agml_citation_bug(exc):
             raise
 
         logging.warning(
-            "AgML public loader hit citation bug for '%s'; falling back to custom loader at '%s'.",
+            "AgML public loader hit citation bug for '%s'; patching citation print and retrying.",
             dataset_name,
-            fallback_root,
         )
-        return AgMLDataLoader.custom(dataset_name, dataset_path=str(fallback_root))
+        if not _patch_agml_citation_bug():
+            raise
+
+        return AgMLDataLoader(dataset_name, **loader_kwargs)
 
 
 def _load_dataset_examples(dataset_name: str, dataset_path: str | None = None) -> list[AgMLExample]:

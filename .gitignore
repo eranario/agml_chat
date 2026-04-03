@@ -5,4 +5,4 @@ __pycache__/
 .rpt2_cache/
 runs/*/checkpoint-*/
 runs/*/final/
-data/agml_sft/
+data/*

@@ -12,6 +12,9 @@ set -euo pipefail
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
 
 REPO_DIR="${REPO_DIR:-$(pwd)}"
+UPDATE_REPO="${UPDATE_REPO:-0}"
+GIT_REF="${GIT_REF:-}"
+LOCK_MODE="${LOCK_MODE:-frozen}" # frozen|refresh
 MODEL="${MODEL:-Qwen/Qwen2.5-VL-3B-Instruct}"
 DATASETS="${DATASETS:-plant_village_classification}"
 PROMPT_CONFIG="${PROMPT_CONFIG:-configs/prompt_config.example.yaml}"
@@ -50,24 +53,49 @@ LOG_DIR="${LOG_DIR:-${RUN_DIR}/logs}"
 mkdir -p "${LOG_DIR}"
 cd "${REPO_DIR}"
 
-echo "[1/6] Checking GPU availability"
+if [[ "${UPDATE_REPO}" == "1" ]]; then
+  echo "[0/7] Updating repository"
+  git fetch --all --prune
+  if [[ -n "${GIT_REF}" ]]; then
+    git checkout "${GIT_REF}"
+  fi
+  git pull --ff-only
+fi
+
+echo "[1/7] Checking GPU availability"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi || true
 else
   echo "nvidia-smi not found (continuing)."
 fi
 
-echo "[2/6] Ensuring uv is installed"
+echo "[2/7] Ensuring uv is installed"
 if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="${HOME}/.local/bin:${PATH}"
 fi
 
-echo "[3/6] Locking and syncing environment"
-uv lock
-uv sync --extra gpu --group dev
+echo "[3/7] Syncing environment"
+if [[ "${LOCK_MODE}" == "refresh" ]]; then
+  uv lock
+  uv sync --extra gpu --group dev
+else
+  uv sync --frozen --extra gpu --group dev
+fi
 
-echo "[4/6] Preparing AgML SFT dataset"
+echo "[4/7] Verifying runtime deps (torch/torchvision)"
+uv run python - <<'PY'
+import torch
+import torchvision
+print(f"torch={torch.__version__} torchvision={torchvision.__version__} cuda={torch.cuda.is_available()}")
+PY
+
+if [[ ! -f "${PROMPT_CONFIG}" ]]; then
+  echo "Prompt config not found: ${PROMPT_CONFIG}" >&2
+  exit 1
+fi
+
+echo "[5/7] Preparing AgML SFT dataset"
 PREP_CMD=(
   uv run -m scripts.prepare_agml_sft
   --datasets "${DATASETS}"
@@ -93,7 +121,7 @@ if [[ ! -f "${TRAIN_JSONL}" ]]; then
   exit 1
 fi
 
-echo "[5/6] Starting fine-tuning"
+echo "[6/7] Starting fine-tuning"
 mkdir -p "${RUN_DIR}"
 
 TRAIN_CMD=(
@@ -138,7 +166,7 @@ if [[ ! -d "${FINAL_MODEL_DIR}" ]]; then
   exit 1
 fi
 
-echo "[6/6] Pipeline complete"
+echo "[7/7] Pipeline complete"
 echo "Dataset dir: ${DATA_DIR}"
 echo "Run dir: ${RUN_DIR}"
 echo "Train log: ${LOG_DIR}/train.log"
