@@ -11,6 +11,7 @@ set -euo pipefail
 #   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/lambda_full_pipeline.sh
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
 #   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
+#   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=0 FLASH_ATTN_FORCE_BUILD=0 bash runs/lambda_full_pipeline.sh
 
 REPO_DIR="${REPO_DIR:-$(pwd)}"
 UPDATE_REPO="${UPDATE_REPO:-0}"
@@ -23,6 +24,11 @@ AUTO_FIX_TORCH_STACK="${AUTO_FIX_TORCH_STACK:-1}"
 GPU_WHEEL_TAG="${GPU_WHEEL_TAG:-auto}" # auto|cu128|cu130|...
 GPU_TORCH_VERSION="${GPU_TORCH_VERSION:-2.11.0}"
 GPU_TORCHVISION_VERSION="${GPU_TORCHVISION_VERSION:-0.26.0}"
+INSTALL_FLASH_ATTN="${INSTALL_FLASH_ATTN:-1}"
+STRICT_FLASH_ATTN="${STRICT_FLASH_ATTN:-0}"
+FLASH_ATTN_FORCE_BUILD="${FLASH_ATTN_FORCE_BUILD:-0}"
+FLASH_ATTN_VERSION="${FLASH_ATTN_VERSION:-}" # optional pin, e.g. 2.8.3
+FLASH_ATTN_MAX_JOBS="${FLASH_ATTN_MAX_JOBS:-8}"
 
 # Split defaults are train-only to keep the path robust if you evaluate elsewhere.
 TRAIN_RATIO="${TRAIN_RATIO:-1.0}"
@@ -107,6 +113,31 @@ print(
 PY
 }
 
+is_flash_attn_installed() {
+  "${VENV_PY}" - <<'PY'
+import importlib.util
+print("1" if importlib.util.find_spec("flash_attn") is not None else "0")
+PY
+}
+
+try_install_flash_attn() {
+  local pkg
+  pkg="flash-attn"
+  if [[ -n "${FLASH_ATTN_VERSION}" ]]; then
+    pkg="flash-attn==${FLASH_ATTN_VERSION}"
+  fi
+
+  if [[ "${FLASH_ATTN_FORCE_BUILD}" == "1" ]]; then
+    MAX_JOBS="${FLASH_ATTN_MAX_JOBS}" uv pip install \
+      --python "${VENV_PY}" \
+      --no-build-isolation \
+      "${pkg}"
+    return $?
+  fi
+
+  uv pip install --python "${VENV_PY}" "${pkg}"
+}
+
 detect_cuda_wheel_tag_from_torch() {
   "${VENV_PY}" - <<'PY'
 try:
@@ -150,6 +181,30 @@ if ! verify_torch_stack; then
   else
     echo "Set AUTO_FIX_TORCH_STACK=1 to auto-repair torch/torchvision mismatch." >&2
     exit 1
+  fi
+fi
+
+if [[ "${NO_FLASH_ATTN}" != "1" ]]; then
+  echo "[4b/7] Checking flash-attn availability"
+  FLASH_PRESENT="$(is_flash_attn_installed)"
+  if [[ "${FLASH_PRESENT}" == "1" ]]; then
+    echo "flash-attn already installed."
+  elif [[ "${INSTALL_FLASH_ATTN}" == "1" ]]; then
+    echo "flash-attn not found; attempting installation ..."
+    if try_install_flash_attn; then
+      FLASH_PRESENT="$(is_flash_attn_installed)"
+      if [[ "${FLASH_PRESENT}" == "1" ]]; then
+        echo "flash-attn installation succeeded."
+      fi
+    fi
+  fi
+
+  if [[ "${FLASH_PRESENT}" != "1" ]]; then
+    if [[ "${STRICT_FLASH_ATTN}" == "1" ]]; then
+      echo "flash-attn is required (STRICT_FLASH_ATTN=1) but is not installed." >&2
+      exit 1
+    fi
+    echo "flash-attn unavailable; training will use SDPA fallback."
   fi
 fi
 
