@@ -19,10 +19,11 @@ AUTO_FIX_TORCH_STACK=1 \
 GPU_WHEEL_TAG=auto \
 INSTALL_FLASH_ATTN=1 \
 FLASH_ATTN_FORCE_BUILD=1 \
+FLASH_ATTN_NO_DEPS=1 \
 STRICT_FLASH_ATTN=1 \
 FLASH_ATTN_MAX_JOBS=32 \
 DATASETS=plant_village_classification \
-TRAIN_RATIO=0.9 VAL_RATIO=0.1 TEST_RATIO=0.0 \
+TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 \
 PER_DEVICE_TRAIN_BATCH_SIZE=8 \
 GRAD_ACCUM=1 \
 LORA_R=64 \
@@ -46,6 +47,7 @@ AUTO_FIX_TORCH_STACK=1 \
 GPU_WHEEL_TAG=auto \
 INSTALL_FLASH_ATTN=1 \
 FLASH_ATTN_FORCE_BUILD=1 \
+FLASH_ATTN_NO_DEPS=1 \
 STRICT_FLASH_ATTN=0 \
 bash runs/lambda_full_pipeline.sh
 ```
@@ -86,3 +88,8 @@ UPDATE_REPO=1 GIT_REF=main bash runs/lambda_full_pipeline.sh
 - Torch/Torchvision mismatch: keep `AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto`.
 - Missing cuDNN/other CUDA runtime libs: rerun with fresh `.venv` and strict command above.
 - FlashAttention build errors: inspect `runs/*/logs/flash_attn_install.log` and lower `FLASH_ATTN_MAX_JOBS` if OOM during build.
+- If `flash_attn_install.log` is very long, check the final result quickly with:
+
+```bash
+grep -n "attention implementation" runs/*/logs/train.log
+```
