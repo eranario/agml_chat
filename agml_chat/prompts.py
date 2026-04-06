@@ -12,7 +12,7 @@ DEFAULT_PROMPT_CONFIG = {
         "when possible and answer with concise, actionable language."
     ),
     "classification_instruction": (
-        "Classify the agricultural image into exactly one option from this choices: {labels}. "
+        "Classify the diagnosis for this plant image into exactly one option from these choices: {labels}. "
         "Return with the correct answer."
     ),
     "research_mode_system_prompt": (
@@ -21,7 +21,7 @@ DEFAULT_PROMPT_CONFIG = {
     ),
     "inference_instruction": (
         "Analyze this agricultural image and answer the user question. If classification is requested, "
-        "choose one label from: {labels}."
+        "choose one diagnosis from: {labels}."
     ),
 }
 

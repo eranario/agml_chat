@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 
 
 def parse_datasets(raw: str) -> list[str]:
@@ -9,6 +11,58 @@ def parse_datasets(raw: str) -> list[str]:
     if not datasets:
         raise ValueError("At least one dataset must be provided")
     return datasets
+
+
+def _print_sample_prompt_and_answer(paths: dict[str, str]) -> None:
+    for split_name in ("train", "val", "test"):
+        sample_path = paths.get(split_name)
+        if not sample_path:
+            continue
+
+        path = Path(sample_path)
+        if not path.exists():
+            continue
+
+        with path.open("r", encoding="utf-8") as f:
+            first_line = f.readline().strip()
+
+        if not first_line:
+            continue
+
+        row = json.loads(first_line)
+        messages = row.get("messages", [])
+        user_prompt = ""
+        assistant_answer = ""
+
+        for message in messages:
+            role = message.get("role")
+            content = message.get("content")
+            if role == "user":
+                if isinstance(content, str):
+                    user_prompt = content
+                elif isinstance(content, list):
+                    for item in content:
+                        if item.get("type") == "text":
+                            user_prompt = item.get("text", "")
+                            break
+            elif role == "assistant" and isinstance(content, str):
+                assistant_answer = content
+                break
+
+        if not user_prompt:
+            user_prompt = "[No text user prompt found in sample record]"
+        if not assistant_answer:
+            assistant_answer = row.get("label", "[No assistant answer found in sample record]")
+
+        print("\nSample training record:")
+        print(f"- split: {split_name}")
+        print("- prompt:")
+        print(user_prompt)
+        print("- expected answer:")
+        print(assistant_answer)
+        return
+
+    print("\nSample training record: none found in exported split files.")
 
 
 def main() -> None:
@@ -53,6 +107,8 @@ def main() -> None:
     print("Prepared dataset files:")
     for split_name, file_path in paths.items():
         print(f"- {split_name}: {file_path}")
+
+    _print_sample_prompt_and_answer(paths)
 
 
 if __name__ == "__main__":

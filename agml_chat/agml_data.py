@@ -33,6 +33,7 @@ class AgMLExample:
     crop_type: str
     class_name: str
     all_labels: list[str]
+    all_diagnoses: list[str]
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,7 @@ def _load_dataset_examples(dataset_name: str, dataset_path: str | None = None) -
         sentence_lookup[idx] = sentence
         parsed_lookup[idx] = (crop_type, class_name)
     labels = [sentence_lookup[idx] for idx in sorted(sentence_lookup)]
+    diagnoses = _dedupe_preserving_order([parsed_lookup[idx][1] for idx in sorted(parsed_lookup)])
 
     examples: list[AgMLExample] = []
     for image_path, label_idx in mapping.items():
@@ -167,6 +169,7 @@ def _load_dataset_examples(dataset_name: str, dataset_path: str | None = None) -
                 crop_type=crop_type,
                 class_name=class_name,
                 all_labels=labels,
+                all_diagnoses=diagnoses,
             )
         )
     return examples
@@ -247,11 +250,7 @@ def build_agml_splits(
 
 
 def _record_from_example(example: AgMLExample, prompt_set: PromptSet) -> dict:
-    instruction = prompt_set.render_classification_instruction(example.all_labels)
-    instruction = (
-        f"{instruction}\n"
-        'Respond exactly in this format: This is an image of a "<crop type>" with "<class>".'
-    )
+    instruction = _build_species_diagnosis_instruction(example=example, prompt_set=prompt_set)
     return {
         "dataset": example.dataset,
         "image_path": example.image_path,
@@ -259,7 +258,7 @@ def _record_from_example(example: AgMLExample, prompt_set: PromptSet) -> dict:
         "raw_label": example.raw_label_text,
         "crop_type": example.crop_type,
         "class_name": example.class_name,
-        "labels": example.all_labels,
+        "labels": _dedupe_preserving_order(example.all_diagnoses),
         "messages": [
             {"role": "system", "content": prompt_set.system_prompt},
             {
@@ -272,6 +271,29 @@ def _record_from_example(example: AgMLExample, prompt_set: PromptSet) -> dict:
             {"role": "assistant", "content": example.label_text},
         ],
     }
+
+
+def _dedupe_preserving_order(items: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def _build_species_diagnosis_instruction(example: AgMLExample, prompt_set: PromptSet) -> str:
+    species_context = f'This is an image of a "{example.crop_type}" plant.'
+    diagnosis_instruction = prompt_set.render_classification_instruction(
+        _dedupe_preserving_order(example.all_diagnoses)
+    )
+    return (
+        f"{species_context}\n"
+        f"{diagnosis_instruction}\n"
+        'Respond exactly in this format: This is an image of a "<crop type>" with "<class>".'
+    )
 
 
 def _clean_label_component(value: str) -> str:

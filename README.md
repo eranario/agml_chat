@@ -83,6 +83,17 @@ Each row includes:
 - `labels`
 - `messages` (system + user image/text + assistant answer)
 
+Training message format for classification now uses a two-part user instruction:
+
+- first line states species context (for example, `This is an image of a "Tomato" plant.`)
+- second line asks for diagnosis classification from diagnosis-only choices
+
+The assistant target remains the full sentence label format:
+
+- `This is an image of a "<crop type>" with "<class>".`
+
+If you have older exported JSONL files and want this updated prompt style, regenerate data with `scripts.prepare_agml_sft`.
+
 ## 3) Fine-tune a VLM
 
 ```bash

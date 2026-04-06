@@ -5,7 +5,7 @@ system_prompt: |
   Explain what is visible and avoid unsupported assumptions.
 
 classification_instruction: |
-  Classify the agricultural image into exactly one option from this choices: {labels}.
+  Classify the diagnosis for this plant image into exactly one option from these choices: {labels}.
   Return with the correct answer.
 
 research_mode_system_prompt: |
@@ -15,4 +15,4 @@ research_mode_system_prompt: |
 
 inference_instruction: |
   Analyze the image and answer the question.
-  If a class label is requested, choose one label from: {labels}.
+  If a diagnosis label is requested, choose one diagnosis from: {labels}.

@@ -10,6 +10,8 @@ from agml_chat.prompts import load_prompt_set
 def test_load_prompt_set_defaults() -> None:
     prompt_set = load_prompt_set()
     assert "agricultural" in prompt_set.system_prompt.lower()
+    assert "diagnosis" in prompt_set.classification_instruction.lower()
+    assert "diagnosis" in prompt_set.inference_instruction.lower()
 
 
 def test_load_prompt_set_rejects_unknown_key(tmp_path: Path) -> None:
