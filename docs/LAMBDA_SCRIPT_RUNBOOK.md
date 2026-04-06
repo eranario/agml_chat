@@ -121,10 +121,12 @@ GPU_WHEEL_TAG=auto \
 GEMMA4_TRANSFORMERS_SOURCE=1 \
 MODEL=google/gemma-4-E2B-it \
 DATASETS=plant_village_classification \
-TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 \
+TRAIN_RATIO=0.9 \
+VAL_RATIO=0.1 \
+TEST_RATIO=0.0 \
 PER_DEVICE_TRAIN_BATCH_SIZE=1 \
 GRAD_ACCUM=8 \
-STRICT_FLASH_ATTN=0 \
+NO_FLASH_ATTN=1 \
 bash runs/lambda_full_pipeline.sh
 ```
 
