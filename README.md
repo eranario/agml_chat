@@ -101,7 +101,17 @@ Notes:
 - LoRA is enabled by default (`--no-lora` to disable)
 - Flash attention path is enabled by default (`--no-flash-attn` to disable)
 - Gemma 4 E2B-it thinking mode is opt-in (`--enable-thinking` in the CLI/web runtime paths)
+- Training runs export easy-to-read metrics in `runs/.../metrics` (CSV + dashboard PNGs + summary markdown)
 - Final model artifacts are saved to `runs/.../final`
+
+Metrics artifacts created per training run:
+
+- `metrics/metrics_long.csv`: one row per metric update (`step`, `epoch`, `metric`, `value`)
+- `metrics/metrics_wide.csv`: spreadsheet-friendly table with one row per step
+- `metrics/metrics_dashboard_*.png`: chart dashboards for loss, learning rate, grad norm, and other logged metrics
+- `metrics/training_summary.md`: compact summary with best/final values for quick review
+
+If needed, disable this export with `--no-metrics-export`.
 
 ## 4) Chat With the Model (CLI)
 

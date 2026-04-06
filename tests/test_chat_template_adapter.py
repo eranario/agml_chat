@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from agml_chat.chat_template_adapter import (
     ModelFamily,
+    apply_family_chat_template,
     detect_model_family,
     normalize_messages_for_family,
 )
@@ -75,3 +76,26 @@ def test_normalize_gemma_messages_converts_all_turns_to_typed_blocks() -> None:
     assert normalized[1]["content"][0]["type"] == "image"
     assert normalized[1]["content"][0]["image"] == "/tmp/leaf.png"
     assert normalized[2]["content"][0] == {"type": "text", "text": "healthy"}
+
+
+def test_apply_family_chat_template_passes_enable_thinking_for_gemma() -> None:
+    calls: dict[str, object] = {}
+
+    class DummyProcessor:
+        def apply_chat_template(self, messages, **kwargs):
+            calls["messages"] = messages
+            calls.update(kwargs)
+            return "PROMPT"
+
+    result = apply_family_chat_template(
+        processor=DummyProcessor(),
+        messages=[{"role": "user", "content": "hello"}],
+        family=ModelFamily.GEMMA_VL,
+        add_generation_prompt=True,
+        enable_thinking=True,
+    )
+
+    assert result == "PROMPT"
+    assert calls["add_generation_prompt"] is True
+    assert calls["tokenize"] is False
+    assert calls["enable_thinking"] is True

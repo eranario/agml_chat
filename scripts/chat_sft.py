@@ -46,6 +46,7 @@ def main() -> None:
     parser.add_argument("--save-total-limit", type=int, default=3)
 
     parser.add_argument("--no-gradient-checkpointing", action="store_true")
+    parser.add_argument("--no-metrics-export", action="store_true", help="Disable training metric CSV/chart export")
 
     parser.add_argument("--no-lora", action="store_true")
     parser.add_argument("--lora-r", type=int, default=16)
@@ -84,6 +85,7 @@ def main() -> None:
         save_steps=args.save_steps,
         save_total_limit=args.save_total_limit,
         gradient_checkpointing=not args.no_gradient_checkpointing,
+        export_metrics=not args.no_metrics_export,
         use_lora=not args.no_lora,
         lora_r=args.lora_r,
         lora_alpha=args.lora_alpha,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import logging
 from inspect import signature
 from dataclasses import dataclass
@@ -56,6 +57,7 @@ class TrainConfig:
     lora_alpha: int = 32
     lora_dropout: float = 0.05
     lora_target_modules: list[str] | None = None
+    export_metrics: bool = True
 
 
 class VisionLanguageSFTCollator:
@@ -108,6 +110,187 @@ class VisionLanguageSFTCollator:
 
         batch["labels"] = labels
         return batch
+
+
+def _is_scalar_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _collect_metric_series(log_history: list[dict[str, Any]]) -> dict[str, list[tuple[float, float]]]:
+    excluded_keys = {
+        "epoch",
+        "step",
+        "total_flos",
+        "train_runtime",
+        "train_samples_per_second",
+        "train_steps_per_second",
+        "train_tokens_per_second",
+    }
+    metric_series: dict[str, list[tuple[float, float]]] = {}
+
+    for row in log_history:
+        step = row.get("step")
+        if not _is_scalar_number(step):
+            continue
+
+        for key, value in row.items():
+            if key in excluded_keys:
+                continue
+            if not _is_scalar_number(value):
+                continue
+            metric_series.setdefault(key, []).append((float(step), float(value)))
+
+    return metric_series
+
+
+def _write_long_metrics_csv(path: Path, log_history: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["step", "epoch", "metric", "value"])
+        for row in log_history:
+            step = row.get("step")
+            if not _is_scalar_number(step):
+                continue
+            epoch = row.get("epoch") if _is_scalar_number(row.get("epoch")) else ""
+            for key, value in row.items():
+                if key in {"step", "epoch"}:
+                    continue
+                if not _is_scalar_number(value):
+                    continue
+                writer.writerow([float(step), epoch, key, float(value)])
+
+
+def _write_wide_metrics_csv(path: Path, metric_series: dict[str, list[tuple[float, float]]]) -> None:
+    by_step: dict[float, dict[str, float]] = {}
+    for metric, points in metric_series.items():
+        for step, value in points:
+            by_step.setdefault(step, {})[metric] = value
+
+    metrics = sorted(metric_series)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["step", *metrics])
+        for step in sorted(by_step):
+            row = [step]
+            values = by_step[step]
+            for metric in metrics:
+                row.append(values.get(metric, ""))
+            writer.writerow(row)
+
+
+def _plot_metrics_dashboards(
+    metrics_dir: Path,
+    metric_series: dict[str, list[tuple[float, float]]],
+    metrics_per_figure: int = 9,
+) -> list[Path]:
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        logging.warning("matplotlib is not installed; skipping training metric plots.")
+        return []
+
+    preferred_order = [
+        "loss",
+        "eval_loss",
+        "learning_rate",
+        "grad_norm",
+        "train_loss",
+        "eval_accuracy",
+        "eval_f1",
+        "eval_precision",
+        "eval_recall",
+    ]
+    metric_names = sorted(metric_series.keys(), key=lambda name: (name not in preferred_order, name))
+
+    output_paths: list[Path] = []
+    for page, start in enumerate(range(0, len(metric_names), metrics_per_figure), start=1):
+        names = metric_names[start : start + metrics_per_figure]
+        cols = 3
+        rows = (len(names) + cols - 1) // cols
+        fig, axes = plt.subplots(rows, cols, figsize=(16, 4.5 * rows), squeeze=False)
+        fig.suptitle("Training Metrics Dashboard", fontsize=14)
+
+        for idx, metric in enumerate(names):
+            r, c = divmod(idx, cols)
+            ax = axes[r][c]
+            points = sorted(metric_series[metric], key=lambda item: item[0])
+            steps = [x for x, _ in points]
+            values = [y for _, y in points]
+
+            ax.plot(steps, values, linewidth=1.8, label=metric)
+            if metric in {"loss", "eval_loss"} and len(values) >= 5:
+                # Smoothed line makes trend interpretation easier on noisy curves.
+                window = min(25, max(5, len(values) // 20))
+                smooth = []
+                for i in range(len(values)):
+                    left = max(0, i - window + 1)
+                    smooth.append(sum(values[left : i + 1]) / (i - left + 1))
+                ax.plot(steps, smooth, linestyle="--", linewidth=1.2, label=f"{metric} (smooth)")
+
+            ax.set_title(metric)
+            ax.set_xlabel("step")
+            ax.set_ylabel(metric)
+            ax.grid(alpha=0.25)
+            ax.legend(loc="best", fontsize=8)
+
+        for idx in range(len(names), rows * cols):
+            r, c = divmod(idx, cols)
+            axes[r][c].axis("off")
+
+        fig.tight_layout()
+        output = metrics_dir / f"metrics_dashboard_{page}.png"
+        fig.savefig(output, dpi=150)
+        plt.close(fig)
+        output_paths.append(output)
+
+    return output_paths
+
+
+def _write_metrics_summary(path: Path, metric_series: dict[str, list[tuple[float, float]]]) -> None:
+    lines = ["# Training Metrics Summary", ""]
+    lines.append(f"- Metrics tracked: {len(metric_series)}")
+
+    if "loss" in metric_series and metric_series["loss"]:
+        min_loss_step, min_loss = min(metric_series["loss"], key=lambda item: item[1])
+        last_step, last_loss = metric_series["loss"][-1]
+        lines.append(f"- Best loss: {min_loss:.6f} at step {int(min_loss_step)}")
+        lines.append(f"- Final logged loss: {last_loss:.6f} at step {int(last_step)}")
+
+    if "eval_loss" in metric_series and metric_series["eval_loss"]:
+        min_eval_step, min_eval = min(metric_series["eval_loss"], key=lambda item: item[1])
+        lines.append(f"- Best eval_loss: {min_eval:.6f} at step {int(min_eval_step)}")
+
+    if "learning_rate" in metric_series and metric_series["learning_rate"]:
+        last_lr = metric_series["learning_rate"][-1][1]
+        lines.append(f"- Final learning_rate: {last_lr:.8f}")
+
+    lines.extend(["", "## Available Files", "", "- `metrics_long.csv`: long-form table with one metric per row", "- `metrics_wide.csv`: step-indexed table suitable for spreadsheets", "- `metrics_dashboard_*.png`: dashboard charts grouped across metrics"]) 
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def export_training_metrics(log_history: list[dict[str, Any]], output_dir: str | Path) -> dict[str, Any]:
+    metrics_dir = Path(output_dir)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+
+    metric_series = _collect_metric_series(log_history)
+    long_csv = metrics_dir / "metrics_long.csv"
+    wide_csv = metrics_dir / "metrics_wide.csv"
+    summary_md = metrics_dir / "training_summary.md"
+
+    _write_long_metrics_csv(long_csv, log_history)
+    _write_wide_metrics_csv(wide_csv, metric_series)
+    dashboards = _plot_metrics_dashboards(metrics_dir, metric_series)
+    _write_metrics_summary(summary_md, metric_series)
+
+    return {
+        "metrics_dir": metrics_dir,
+        "long_csv": long_csv,
+        "wide_csv": wide_csv,
+        "dashboards": dashboards,
+        "summary": summary_md,
+        "metric_count": len(metric_series),
+    }
 
 
 def _build_training_arguments(**kwargs: Any) -> TrainingArguments:
@@ -219,6 +402,17 @@ def run_training(config: TrainConfig) -> None:
     )
 
     trainer.train()
+
+    if config.export_metrics:
+        metrics_output = export_training_metrics(
+            log_history=trainer.state.log_history,
+            output_dir=Path(config.output_dir) / "metrics",
+        )
+        logging.info(
+            "Exported %d metrics to %s",
+            metrics_output["metric_count"],
+            metrics_output["metrics_dir"],
+        )
 
     final_dir = str(Path(config.output_dir) / "final")
     ensure_dir(final_dir)

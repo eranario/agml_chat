@@ -196,6 +196,7 @@ def apply_family_chat_template(
     messages: list[dict[str, Any]],
     family: ModelFamily,
     add_generation_prompt: bool,
+    enable_thinking: bool = False,
 ) -> str:
     if hasattr(processor, "apply_chat_template"):
         kwargs: dict[str, Any] = {
@@ -203,7 +204,7 @@ def apply_family_chat_template(
             "add_generation_prompt": add_generation_prompt,
         }
         if family == ModelFamily.GEMMA_VL:
-            kwargs["enable_thinking"] = False
+            kwargs["enable_thinking"] = enable_thinking
         return processor.apply_chat_template(messages, **kwargs)
 
     tokenizer = getattr(processor, "tokenizer", None)
@@ -213,7 +214,7 @@ def apply_family_chat_template(
             "add_generation_prompt": add_generation_prompt,
         }
         if family == ModelFamily.GEMMA_VL:
-            kwargs["enable_thinking"] = False
+            kwargs["enable_thinking"] = enable_thinking
         return tokenizer.apply_chat_template(messages, **kwargs)
 
     # Fallback format when no chat template exists.
