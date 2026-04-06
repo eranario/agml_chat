@@ -11,7 +11,7 @@ set -euo pipefail
 #   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/lambda_full_pipeline.sh
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
 #   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
-#   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=1 FLASH_ATTN_FORCE_BUILD=1 FLASH_ATTN_NO_DEPS=1 bash runs/lambda_full_pipeline.sh
+#   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=1 FLASH_ATTN_FORCE_BUILD=0 FLASH_ATTN_NO_DEPS=1 bash runs/lambda_full_pipeline.sh
 
 REPO_DIR="${REPO_DIR:-$(pwd)}"
 UPDATE_REPO="${UPDATE_REPO:-0}"
@@ -26,7 +26,7 @@ GPU_TORCH_VERSION="${GPU_TORCH_VERSION:-2.11.0}"
 GPU_TORCHVISION_VERSION="${GPU_TORCHVISION_VERSION:-0.26.0}"
 INSTALL_FLASH_ATTN="${INSTALL_FLASH_ATTN:-1}"
 STRICT_FLASH_ATTN="${STRICT_FLASH_ATTN:-1}"
-FLASH_ATTN_FORCE_BUILD="${FLASH_ATTN_FORCE_BUILD:-1}"
+FLASH_ATTN_FORCE_BUILD="${FLASH_ATTN_FORCE_BUILD:-0}"
 FLASH_ATTN_VERSION="${FLASH_ATTN_VERSION:-}" # optional pin, e.g. 2.8.3
 FLASH_ATTN_MAX_JOBS="${FLASH_ATTN_MAX_JOBS:-4}"
 FLASH_ATTN_NO_DEPS="${FLASH_ATTN_NO_DEPS:-1}"
@@ -137,7 +137,7 @@ try_install_flash_attn() {
     echo "Installing ${pkg} (source-build mode) ..." | tee -a "${FLASH_ATTN_LOG}"
   else
     echo "Installing ${pkg} (wheel-first strategy) ..." | tee -a "${FLASH_ATTN_LOG}"
-    if uv pip install --python "${VENV_PY}" "${pkg}" >>"${FLASH_ATTN_LOG}" 2>&1; then
+    if MAX_JOBS="${FLASH_ATTN_MAX_JOBS}" uv pip install --python "${VENV_PY}" --no-build-isolation "${pkg}" >>"${FLASH_ATTN_LOG}" 2>&1; then
       return 0
     fi
     echo "Wheel install failed. See ${FLASH_ATTN_LOG}" | tee -a "${FLASH_ATTN_LOG}"
