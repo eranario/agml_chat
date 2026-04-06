@@ -90,9 +90,16 @@ class VisionLanguageSFTCollator:
             texts.append(text)
             images.append(image)
 
+        processor_images: list[Any]
+        if self.model_family == ModelFamily.GEMMA_VL:
+            # Gemma 4 processors expect one image-list per text sample in batched mode.
+            processor_images = [[image] for image in images]
+        else:
+            processor_images = images
+
         batch = self.processor(
             text=texts,
-            images=images,
+            images=processor_images,
             return_tensors="pt",
             truncation=True,
             max_length=self.max_length,
