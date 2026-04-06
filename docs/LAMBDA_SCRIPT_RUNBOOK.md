@@ -198,7 +198,7 @@ Use these as environment variables before `bash runs/lambda_full_pipeline.sh`.
 | `FLASH_ATTN_FORCE_BUILD` | `0` | If `1`, skip wheel-first and force source build. |
 | `FLASH_ATTN_VERSION` | empty | Optional flash-attn version pin. |
 | `FLASH_ATTN_NO_DEPS` | `1` | Build flash-attn without reinstalling torch deps. |
-| `FLASH_ATTN_MAX_JOBS` | `4` | Build parallelism (`MAX_JOBS`). |
+| `FLASH_ATTN_MAX_JOBS` | `24` | Build parallelism (`MAX_JOBS`). |
 | `FLASH_ATTN_NVCC_THREADS` | `1` | NVCC thread count used by build. |
 | `FLASH_ATTN_TORCH_CUDA_ARCH_LIST` | `9.0` | CUDA arch list for compile. |
 | `FLASH_ATTN_RETRY_MINIMAL` | `1` | Retry source build with minimal parallelism if first build fails. |
