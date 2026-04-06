@@ -12,6 +12,7 @@ set -euo pipefail
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
 #   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
 #   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=1 FLASH_ATTN_FORCE_BUILD=0 FLASH_ATTN_NO_DEPS=1 bash runs/lambda_full_pipeline.sh
+#   GEMMA4_TRANSFORMERS_SOURCE=1 MODEL=google/gemma-4-E2B-it bash runs/lambda_full_pipeline.sh
 
 REPO_DIR="${REPO_DIR:-$(pwd)}"
 UPDATE_REPO="${UPDATE_REPO:-0}"
@@ -33,6 +34,7 @@ FLASH_ATTN_NO_DEPS="${FLASH_ATTN_NO_DEPS:-1}"
 FLASH_ATTN_NVCC_THREADS="${FLASH_ATTN_NVCC_THREADS:-1}"
 FLASH_ATTN_TORCH_CUDA_ARCH_LIST="${FLASH_ATTN_TORCH_CUDA_ARCH_LIST:-9.0}"
 FLASH_ATTN_RETRY_MINIMAL="${FLASH_ATTN_RETRY_MINIMAL:-1}"
+GEMMA4_TRANSFORMERS_SOURCE="${GEMMA4_TRANSFORMERS_SOURCE:-auto}" # auto|1|0
 
 # Split defaults are train-only to keep the path robust if you evaluate elsewhere.
 TRAIN_RATIO="${TRAIN_RATIO:-1.0}"
@@ -99,6 +101,11 @@ if [[ "${LOCK_MODE}" == "refresh" ]]; then
   uv sync --extra gpu --group dev
 else
   uv sync --frozen --extra gpu --group dev
+fi
+
+if [[ "${GEMMA4_TRANSFORMERS_SOURCE}" == "1" || ( "${GEMMA4_TRANSFORMERS_SOURCE}" == "auto" && "${MODEL,,}" == *"gemma-4"* ) ]]; then
+  echo "[3b/7] Installing latest Transformers from source for Gemma 4 compatibility"
+  uv pip install --python "${REPO_DIR}/.venv/bin/python" --upgrade "git+https://github.com/huggingface/transformers.git"
 fi
 
 VENV_PY="${REPO_DIR}/.venv/bin/python"

@@ -118,6 +118,7 @@ cd ~/agml_chat
 LOCK_MODE=frozen \
 AUTO_FIX_TORCH_STACK=1 \
 GPU_WHEEL_TAG=auto \
+GEMMA4_TRANSFORMERS_SOURCE=1 \
 MODEL=google/gemma-4-E2B-it \
 DATASETS=plant_village_classification \
 TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 \
@@ -126,6 +127,12 @@ GRAD_ACCUM=8 \
 STRICT_FLASH_ATTN=0 \
 bash runs/lambda_full_pipeline.sh
 ```
+
+Important:
+
+- `NO_FLASH_ATTN=0` means flash-attn path is enabled and the script may attempt install.
+- Use `NO_FLASH_ATTN=1` to force SDPA and skip flash-attn checks/install.
+- If you want to keep flash path enabled but skip installation attempts, set `INSTALL_FLASH_ATTN=0`.
 
 Metrics are exported automatically under `runs/sft_<RUN_TAG>/metrics`:
 
@@ -146,6 +153,8 @@ if latest:
   print(latest[-1].read_text()[:1200])
 PY
 ```
+
+If you see `model type 'gemma4' ... Transformers does not recognize this architecture`, rerun with `GEMMA4_TRANSFORMERS_SOURCE=1` (or keep `auto`, which applies source install whenever the model id contains `gemma-4`).
 
 ## 4) Verify what attention path was used
 
@@ -178,6 +187,12 @@ NO_FLASH_ATTN=1 bash runs/lambda_full_pipeline.sh
 NO_METRICS_EXPORT=1 bash runs/lambda_full_pipeline.sh
 ```
 
+- Force latest Transformers source install for Gemma 4:
+
+```bash
+GEMMA4_TRANSFORMERS_SOURCE=1 MODEL=google/gemma-4-E2B-it bash runs/lambda_full_pipeline.sh
+```
+
 - Update repo inside script before run:
 
 ```bash
@@ -197,6 +212,7 @@ Use these as environment variables before `bash runs/lambda_full_pipeline.sh`.
 | `GIT_REF` | empty | Branch/tag/SHA to checkout when `UPDATE_REPO=1`. |
 | `LOCK_MODE` | `frozen` | `frozen` uses lockfile, `refresh` relocks then syncs. |
 | `MODEL` | `Qwen/Qwen2.5-VL-3B-Instruct` | HF model id/path for SFT. |
+| `GEMMA4_TRANSFORMERS_SOURCE` | `auto` | `auto` installs Transformers from source for `gemma-4*` models, `1` forces it, `0` disables it. |
 | `DATASETS` | `plant_village_classification` | Comma-separated AgML datasets. |
 | `PROMPT_CONFIG` | `configs/prompt_config.example.yaml` | Prompt config YAML path. |
 
