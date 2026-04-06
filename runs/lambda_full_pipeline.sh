@@ -36,9 +36,9 @@ FLASH_ATTN_TORCH_CUDA_ARCH_LIST="${FLASH_ATTN_TORCH_CUDA_ARCH_LIST:-9.0}"
 FLASH_ATTN_RETRY_MINIMAL="${FLASH_ATTN_RETRY_MINIMAL:-1}"
 GEMMA4_TRANSFORMERS_SOURCE="${GEMMA4_TRANSFORMERS_SOURCE:-auto}" # auto|1|0
 
-# Split defaults are train-only to keep the path robust if you evaluate elsewhere.
-TRAIN_RATIO="${TRAIN_RATIO:-1.0}"
-VAL_RATIO="${VAL_RATIO:-0.0}"
+# Split defaults create both train and validation data for in-run eval/monitoring.
+TRAIN_RATIO="${TRAIN_RATIO:-0.9}"
+VAL_RATIO="${VAL_RATIO:-0.1}"
 TEST_RATIO="${TEST_RATIO:-0.0}"
 SEED="${SEED:-42}"
 MAX_SAMPLES_PER_DATASET="${MAX_SAMPLES_PER_DATASET:-}"
