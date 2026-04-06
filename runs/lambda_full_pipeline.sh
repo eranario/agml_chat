@@ -56,6 +56,7 @@ LORA_ALPHA="${LORA_ALPHA:-32}"
 LORA_DROPOUT="${LORA_DROPOUT:-0.05}"
 LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-}"
 NO_FLASH_ATTN="${NO_FLASH_ATTN:-0}"
+NO_METRICS_EXPORT="${NO_METRICS_EXPORT:-0}"
 
 START_WEB="${START_WEB:-0}"
 HOST="${HOST:-0.0.0.0}"
@@ -325,6 +326,10 @@ fi
 
 if [[ "${NO_FLASH_ATTN}" == "1" ]]; then
   TRAIN_CMD+=(--no-flash-attn)
+fi
+
+if [[ "${NO_METRICS_EXPORT}" == "1" ]]; then
+  TRAIN_CMD+=(--no-metrics-export)
 fi
 
 "${TRAIN_CMD[@]}" 2>&1 | tee "${LOG_DIR}/train.log"

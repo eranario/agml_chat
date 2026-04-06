@@ -111,6 +111,42 @@ STRICT_FLASH_ATTN=0 \
 bash runs/lambda_full_pipeline.sh
 ```
 
+## 3c) Gemma 4 E2B-it run with metrics dashboards
+
+```bash
+cd ~/agml_chat
+LOCK_MODE=frozen \
+AUTO_FIX_TORCH_STACK=1 \
+GPU_WHEEL_TAG=auto \
+MODEL=google/gemma-4-E2B-it \
+DATASETS=plant_village_classification \
+TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 \
+PER_DEVICE_TRAIN_BATCH_SIZE=1 \
+GRAD_ACCUM=8 \
+STRICT_FLASH_ATTN=0 \
+bash runs/lambda_full_pipeline.sh
+```
+
+Metrics are exported automatically under `runs/sft_<RUN_TAG>/metrics`:
+
+- `metrics_long.csv` (long-form table)
+- `metrics_wide.csv` (step-indexed spreadsheet view)
+- `metrics_dashboard_*.png` (plots for loss, lr, grad norm, eval metrics)
+- `training_summary.md` (best/final values)
+
+Quick checks:
+
+```bash
+ls -lah runs/sft_*/metrics
+python - <<'PY'
+from pathlib import Path
+latest = sorted(Path("runs").glob("sft_*/metrics/training_summary.md"))
+if latest:
+  print(latest[-1])
+  print(latest[-1].read_text()[:1200])
+PY
+```
+
 ## 4) Verify what attention path was used
 
 ```bash
@@ -134,6 +170,12 @@ NO_LORA=1 bash runs/lambda_full_pipeline.sh
 
 ```bash
 NO_FLASH_ATTN=1 bash runs/lambda_full_pipeline.sh
+```
+
+- Disable metrics export intentionally:
+
+```bash
+NO_METRICS_EXPORT=1 bash runs/lambda_full_pipeline.sh
 ```
 
 - Update repo inside script before run:
@@ -190,6 +232,7 @@ Use these as environment variables before `bash runs/lambda_full_pipeline.sh`.
 | `LORA_ALPHA` | `32` | LoRA alpha. |
 | `LORA_DROPOUT` | `0.05` | LoRA dropout. |
 | `LORA_TARGET_MODULES` | empty | Comma-separated target modules (optional override). |
+| `NO_METRICS_EXPORT` | `0` | If `1`, disables metrics CSV/chart export. |
 
 ### Torch/Torchvision Repair
 
