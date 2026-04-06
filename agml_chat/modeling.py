@@ -125,6 +125,18 @@ def maybe_wrap_lora(
         target_modules=target_modules,
         task_type="CAUSAL_LM",
     )
-    wrapped = get_peft_model(model, config)
+    try:
+        wrapped = get_peft_model(model, config)
+    except ValueError as exc:
+        message = str(exc)
+        if "Target module" in message and "is not supported" in message:
+            logging.warning(
+                "LoRA could not wrap one or more target modules (%s). "
+                "Continuing without LoRA for this run. "
+                "Set --no-lora to disable this warning.",
+                message,
+            )
+            return model
+        raise
     wrapped.print_trainable_parameters()
     return wrapped
