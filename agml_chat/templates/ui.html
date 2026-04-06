@@ -317,6 +317,9 @@
             if (!event.startsWith('data: ')) continue;
             const payload = JSON.parse(event.slice(6));
             if (payload.done) {
+              if (!assistantBubble.textContent.trim()) {
+                assistantBubble.textContent = '[No response text returned from model]';
+              }
               state.messages.push({ role: 'assistant', content: assistantBubble.textContent });
               continue;
             }

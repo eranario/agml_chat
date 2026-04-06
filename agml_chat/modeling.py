@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 import torch
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, PeftModel, get_peft_model
 import transformers
 from transformers import AutoModelForCausalLM, AutoProcessor
 
@@ -56,6 +58,29 @@ def _try_model_loader(loader: Any, model_name: str, kwargs: dict) -> torch.nn.Mo
         return None
 
 
+def _resolve_base_model_for_adapter(model_name: str) -> tuple[str, str | None]:
+    """Return (base_model_name, adapter_path) when model_name points to a local PEFT adapter dir."""
+    path = Path(model_name)
+    if not path.exists() or not path.is_dir():
+        return model_name, None
+
+    adapter_config_path = path / "adapter_config.json"
+    if not adapter_config_path.exists():
+        return model_name, None
+
+    try:
+        adapter_cfg = json.loads(adapter_config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError(f"Failed to parse adapter config at {adapter_config_path}: {exc}") from exc
+
+    base_model_name = adapter_cfg.get("base_model_name_or_path")
+    if not base_model_name:
+        raise ValueError(
+            f"Adapter config at {adapter_config_path} is missing 'base_model_name_or_path'."
+        )
+    return str(base_model_name), str(path)
+
+
 
 def load_model_and_processor(
     model_name: str,
@@ -63,7 +88,22 @@ def load_model_and_processor(
     use_flash_attention: bool,
     trust_remote_code: bool = True,
 ) -> tuple[torch.nn.Module, Any, ModelFamily]:
-    processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+    base_model_name, adapter_path = _resolve_base_model_for_adapter(model_name)
+
+    processor = None
+    processor_sources = [model_name]
+    if adapter_path is not None and base_model_name != model_name:
+        processor_sources.append(base_model_name)
+    last_processor_exc: Exception | None = None
+    for source in processor_sources:
+        try:
+            processor = AutoProcessor.from_pretrained(source, trust_remote_code=trust_remote_code)
+            break
+        except Exception as exc:
+            last_processor_exc = exc
+    if processor is None:
+        assert last_processor_exc is not None
+        raise last_processor_exc
 
     attention_impl = resolve_attention_implementation(runtime.device, use_flash_attention)
     model_kwargs = {
@@ -78,13 +118,16 @@ def load_model_and_processor(
     image_text_loader = getattr(transformers, "AutoModelForImageTextToText", None)
     vision2seq_loader = getattr(transformers, "AutoModelForVision2Seq", None)
 
-    model = _try_model_loader(image_text_loader, model_name, model_kwargs_with_attn)
+    model = _try_model_loader(image_text_loader, base_model_name, model_kwargs_with_attn)
     if model is None:
-        model = _try_model_loader(vision2seq_loader, model_name, model_kwargs_with_attn)
+        model = _try_model_loader(vision2seq_loader, base_model_name, model_kwargs_with_attn)
     if model is None:
-        model = _try_model_loader(AutoModelForCausalLM, model_name, model_kwargs_with_attn)
+        model = _try_model_loader(AutoModelForCausalLM, base_model_name, model_kwargs_with_attn)
     if model is None:
-        model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+        model = AutoModelForCausalLM.from_pretrained(base_model_name, **model_kwargs)
+
+    if adapter_path is not None:
+        model = PeftModel.from_pretrained(model, adapter_path)
 
     if runtime.device == "cuda":
         model = model.to("cuda")
@@ -97,8 +140,10 @@ def load_model_and_processor(
     if tokenizer and tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model_family = detect_model_family(model_name_or_path=model_name, processor=processor, model=model)
-    logging.info("Loaded model %s with attention implementation '%s'", model_name, attention_impl)
+    model_family = detect_model_family(model_name_or_path=base_model_name, processor=processor, model=model)
+    logging.info("Loaded model %s with attention implementation '%s'", base_model_name, attention_impl)
+    if adapter_path is not None:
+        logging.info("Loaded PEFT adapter from %s", adapter_path)
     logging.info("Detected model family: %s", model_family.value)
     return model, processor, model_family
 

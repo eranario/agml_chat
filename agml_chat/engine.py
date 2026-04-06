@@ -180,8 +180,18 @@ class ChatEngine:
             "streamer": streamer,
         }
 
-        thread = threading.Thread(target=self.model.generate, kwargs=kwargs)
+        generation_error: list[Exception] = []
+
+        def run_generation() -> None:
+            try:
+                self.model.generate(**kwargs)
+            except Exception as exc:
+                generation_error.append(exc)
+
+        thread = threading.Thread(target=run_generation)
         thread.start()
         for token_text in streamer:
             yield token_text
         thread.join()
+        if generation_error:
+            raise generation_error[0]

@@ -202,15 +202,36 @@ def create_app(engine: ChatEngine, prompt_set: PromptSet, ui_html_path: str) -> 
                 yield "data: {\"done\": true}\n\n"
                 return
 
-            for token in engine.generate_stream(
-                prompt=prompt,
-                image_path=image_path,
-                history=history,
-                system_prompt=prompt_set.system_prompt,
-                generation=generation,
-                enable_thinking=request.enable_thinking,
-            ):
-                yield f"data: {json.dumps({'token': token})}\n\n"
+            try:
+                emitted = 0
+                for token in engine.generate_stream(
+                    prompt=prompt,
+                    image_path=image_path,
+                    history=history,
+                    system_prompt=prompt_set.system_prompt,
+                    generation=generation,
+                    enable_thinking=request.enable_thinking,
+                ):
+                    emitted += 1
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+
+                if emitted == 0:
+                    # Some model/runtime combinations may not stream tokens but can still return
+                    # a complete non-stream response; use it as a fallback for better UX.
+                    fallback = engine.generate(
+                        prompt=prompt,
+                        image_path=image_path,
+                        history=history,
+                        system_prompt=prompt_set.system_prompt,
+                        generation=generation,
+                        enable_thinking=request.enable_thinking,
+                    ).strip()
+                    if fallback:
+                        yield f"data: {json.dumps({'token': fallback})}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'token': '[No text generated. Try disabling thinking mode, reducing max tokens, or checking model compatibility.]'})}\n\n"
+            except Exception as exc:
+                yield f"data: {json.dumps({'token': f'[Streaming failed: {exc}]'})}\n\n"
 
             yield "data: {\"done\": true}\n\n"
 
