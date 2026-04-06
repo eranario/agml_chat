@@ -47,6 +47,17 @@ def main() -> None:
 
     parser.add_argument("--no-gradient-checkpointing", action="store_true")
     parser.add_argument("--no-metrics-export", action="store_true", help="Disable training metric CSV/chart export")
+    parser.add_argument(
+        "--live-metrics",
+        action="store_true",
+        help="Continuously refresh metrics CSV/chart artifacts while training is running",
+    )
+    parser.add_argument(
+        "--live-metrics-every-n-logs",
+        type=int,
+        default=1,
+        help="Refresh live metrics artifacts every N log events when --live-metrics is enabled",
+    )
 
     parser.add_argument("--no-lora", action="store_true")
     parser.add_argument("--lora-r", type=int, default=16)
@@ -86,6 +97,8 @@ def main() -> None:
         save_total_limit=args.save_total_limit,
         gradient_checkpointing=not args.no_gradient_checkpointing,
         export_metrics=not args.no_metrics_export,
+        live_metrics=args.live_metrics,
+        live_metrics_every_n_logs=args.live_metrics_every_n_logs,
         use_lora=not args.no_lora,
         lora_r=args.lora_r,
         lora_alpha=args.lora_alpha,

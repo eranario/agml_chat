@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from transformers import Trainer, TrainingArguments
+from transformers import Trainer, TrainerCallback, TrainingArguments
 from transformers import __version__ as transformers_version
 
 from agml_chat.chat_template_adapter import (
@@ -58,6 +58,8 @@ class TrainConfig:
     lora_dropout: float = 0.05
     lora_target_modules: list[str] | None = None
     export_metrics: bool = True
+    live_metrics: bool = False
+    live_metrics_every_n_logs: int = 1
 
 
 class VisionLanguageSFTCollator:
@@ -293,6 +295,39 @@ def export_training_metrics(log_history: list[dict[str, Any]], output_dir: str |
     }
 
 
+class LiveMetricsExportCallback(TrainerCallback):
+    def __init__(self, output_dir: str | Path, every_n_logs: int = 1):
+        self.metrics_dir = Path(output_dir) / "metrics"
+        self.every_n_logs = max(1, every_n_logs)
+        self._log_events = 0
+
+    def _maybe_export(self, state: Any, force: bool = False) -> None:
+        if not state.log_history:
+            return
+
+        if not force:
+            self._log_events += 1
+            if self._log_events % self.every_n_logs != 0:
+                return
+
+        try:
+            export_training_metrics(log_history=state.log_history, output_dir=self.metrics_dir)
+        except Exception:
+            logging.exception("Live metrics export failed; continuing training.")
+
+    def on_log(self, args: TrainingArguments, state: Any, control: Any, **kwargs: Any) -> Any:
+        self._maybe_export(state=state)
+        return control
+
+    def on_evaluate(self, args: TrainingArguments, state: Any, control: Any, **kwargs: Any) -> Any:
+        self._maybe_export(state=state)
+        return control
+
+    def on_train_end(self, args: TrainingArguments, state: Any, control: Any, **kwargs: Any) -> Any:
+        self._maybe_export(state=state, force=True)
+        return control
+
+
 def _build_training_arguments(**kwargs: Any) -> TrainingArguments:
     """
     Build TrainingArguments across transformers versions by:
@@ -393,12 +428,22 @@ def run_training(config: TrainConfig) -> None:
         report_to=report_to,
     )
 
+    callbacks = []
+    if config.export_metrics and config.live_metrics:
+        callbacks.append(
+            LiveMetricsExportCallback(
+                output_dir=config.output_dir,
+                every_n_logs=config.live_metrics_every_n_logs,
+            )
+        )
+
     trainer = Trainer(
         model=model,
         args=training_args,
         data_collator=collator,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
+        callbacks=callbacks,
     )
 
     trainer.train()

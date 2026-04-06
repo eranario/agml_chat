@@ -113,6 +113,8 @@ Notes:
 - Flash attention path is enabled by default (`--no-flash-attn` to disable)
 - Gemma 4 E2B-it thinking mode is opt-in (`--enable-thinking` in the CLI/web runtime paths)
 - Training runs export easy-to-read metrics in `runs/.../metrics` (CSV + dashboard PNGs + summary markdown)
+- Add `--live-metrics` to refresh metrics CSV/graphs while training is running
+- Use `--live-metrics-every-n-logs` to control refresh frequency (default: every log event)
 - Final model artifacts are saved to `runs/.../final`
 
 Metrics artifacts created per training run:
