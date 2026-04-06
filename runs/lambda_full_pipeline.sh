@@ -9,6 +9,7 @@ set -euo pipefail
 # Optional overrides:
 #   MODEL="Qwen/Qwen2.5-VL-3B-Instruct" DATASETS="plant_village_classification" bash runs/lambda_full_pipeline.sh
 #   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/lambda_full_pipeline.sh
+#   LIVE_METRICS=1 LIVE_METRICS_EVERY_N_LOGS=1 bash runs/lambda_full_pipeline.sh
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
 #   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
 #   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=1 FLASH_ATTN_FORCE_BUILD=0 FLASH_ATTN_NO_DEPS=1 bash runs/lambda_full_pipeline.sh
@@ -59,6 +60,8 @@ LORA_DROPOUT="${LORA_DROPOUT:-0.05}"
 LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-}"
 NO_FLASH_ATTN="${NO_FLASH_ATTN:-0}"
 NO_METRICS_EXPORT="${NO_METRICS_EXPORT:-0}"
+LIVE_METRICS="${LIVE_METRICS:-1}"
+LIVE_METRICS_EVERY_N_LOGS="${LIVE_METRICS_EVERY_N_LOGS:-1}"
 
 START_WEB="${START_WEB:-0}"
 HOST="${HOST:-0.0.0.0}"
@@ -295,6 +298,7 @@ fi
 "${PREP_CMD[@]}" | tee "${LOG_DIR}/prepare.log"
 
 TRAIN_JSONL="${DATA_DIR}/train.jsonl"
+VAL_JSONL="${DATA_DIR}/val.jsonl"
 
 if [[ ! -f "${TRAIN_JSONL}" ]]; then
   echo "train.jsonl was not generated at ${TRAIN_JSONL}" >&2
@@ -323,6 +327,10 @@ TRAIN_CMD=(
   --lora-dropout "${LORA_DROPOUT}"
 )
 
+if [[ -f "${VAL_JSONL}" ]]; then
+  TRAIN_CMD+=(--val-jsonl "${VAL_JSONL}")
+fi
+
 if [[ "${NO_LORA}" == "1" ]]; then
   TRAIN_CMD+=(--no-lora)
 fi
@@ -337,6 +345,10 @@ fi
 
 if [[ "${NO_METRICS_EXPORT}" == "1" ]]; then
   TRAIN_CMD+=(--no-metrics-export)
+fi
+
+if [[ "${LIVE_METRICS}" == "1" && "${NO_METRICS_EXPORT}" != "1" ]]; then
+  TRAIN_CMD+=(--live-metrics --live-metrics-every-n-logs "${LIVE_METRICS_EVERY_N_LOGS}")
 fi
 
 "${TRAIN_CMD[@]}" 2>&1 | tee "${LOG_DIR}/train.log"
