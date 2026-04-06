@@ -99,6 +99,18 @@ FLASH_ATTN_TORCH_CUDA_ARCH_LIST=9.0 \
 bash runs/lambda_full_pipeline.sh
 ```
 
+## 3b) Run explicitly without FlashAttention (force SDPA)
+
+```bash
+cd ~/agml_chat
+LOCK_MODE=frozen \
+AUTO_FIX_TORCH_STACK=1 \
+GPU_WHEEL_TAG=auto \
+NO_FLASH_ATTN=1 \
+STRICT_FLASH_ATTN=0 \
+bash runs/lambda_full_pipeline.sh
+```
+
 ## 4) Verify what attention path was used
 
 ```bash
@@ -225,6 +237,26 @@ LORA_R=64 \
 LORA_ALPHA=128 \
 LORA_DROPOUT=0.05 \
 bash runs/lambda_full_pipeline.sh
+```
+
+### Batch Size Defaults and How To Change
+
+Defaults in `runs/lambda_full_pipeline.sh`:
+- `PER_DEVICE_TRAIN_BATCH_SIZE=1`
+- `GRAD_ACCUM=8`
+
+Effective batch size is:
+- `effective_batch = PER_DEVICE_TRAIN_BATCH_SIZE * GRAD_ACCUM`
+- default effective batch = `8`
+
+Examples:
+
+```bash
+# Increase per-device batch, no accumulation
+PER_DEVICE_TRAIN_BATCH_SIZE=8 GRAD_ACCUM=1 bash runs/lambda_full_pipeline.sh
+
+# Keep flash-attn off and use bigger batch
+NO_FLASH_ATTN=1 PER_DEVICE_TRAIN_BATCH_SIZE=8 GRAD_ACCUM=1 bash runs/lambda_full_pipeline.sh
 ```
 
 ### Example: Force source build only when wheel-first fails

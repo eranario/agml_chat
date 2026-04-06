@@ -10,6 +10,7 @@ from transformers import TextIteratorStreamer
 from agml_chat.chat_template_adapter import (
     ModelFamily,
     apply_family_chat_template,
+    family_supports_thinking,
     normalize_messages_for_family,
 )
 from agml_chat.common import RuntimeConfig, build_runtime_config
@@ -100,6 +101,7 @@ class ChatEngine:
         history: Iterable[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
         generation: GenerationConfig | None = None,
+        enable_thinking: bool = False,
     ) -> str:
         generation = generation or GenerationConfig()
         messages = self._build_messages(
@@ -118,6 +120,7 @@ class ChatEngine:
             messages=normalized_messages,
             family=self.model_family,
             add_generation_prompt=True,
+            enable_thinking=enable_thinking and family_supports_thinking(self.model_family),
         )
         inputs = self._prepare_inputs(text=text, image_path=image_path)
 
@@ -142,6 +145,7 @@ class ChatEngine:
         history: Iterable[dict[str, Any]] | None = None,
         system_prompt: str | None = None,
         generation: GenerationConfig | None = None,
+        enable_thinking: bool = False,
     ):
         generation = generation or GenerationConfig()
         messages = self._build_messages(
@@ -160,6 +164,7 @@ class ChatEngine:
             messages=normalized_messages,
             family=self.model_family,
             add_generation_prompt=True,
+            enable_thinking=enable_thinking and family_supports_thinking(self.model_family),
         )
         inputs = self._prepare_inputs(text=text, image_path=image_path)
 

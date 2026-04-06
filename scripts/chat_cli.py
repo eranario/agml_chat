@@ -26,6 +26,7 @@ def main() -> None:
         help="Optional compute dtype override",
     )
     parser.add_argument("--no-flash-attn", action="store_true")
+    parser.add_argument("--enable-thinking", action="store_true", help="Enable Gemma 4 thinking mode when supported")
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--top-p", type=float, default=0.95)
     parser.add_argument("--max-new-tokens", type=int, default=256)
@@ -71,6 +72,7 @@ def main() -> None:
             history=history,
             system_prompt=prompt_set.system_prompt,
             generation=generation,
+            enable_thinking=args.enable_thinking,
         )
 
     if args.single_prompt:

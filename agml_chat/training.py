@@ -13,6 +13,7 @@ from transformers import __version__ as transformers_version
 from agml_chat.chat_template_adapter import (
     ModelFamily,
     apply_family_chat_template,
+    family_supports_thinking,
     normalize_messages_for_family,
 )
 from agml_chat.common import build_runtime_config, configure_logging, ensure_dir, set_seed
@@ -58,10 +59,11 @@ class TrainConfig:
 
 
 class VisionLanguageSFTCollator:
-    def __init__(self, processor: Any, model_family: ModelFamily, max_length: int = 2048):
+    def __init__(self, processor: Any, model_family: ModelFamily, max_length: int = 2048, enable_thinking: bool = False):
         self.processor = processor
         self.model_family = model_family
         self.max_length = max_length
+        self.enable_thinking = enable_thinking
 
     def __call__(self, features: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
         texts: list[str] = []
@@ -78,6 +80,7 @@ class VisionLanguageSFTCollator:
                 messages=messages,
                 family=self.model_family,
                 add_generation_prompt=False,
+                enable_thinking=self.enable_thinking and family_supports_thinking(self.model_family),
             )
             image = load_image(feature["image_path"])
             texts.append(text)

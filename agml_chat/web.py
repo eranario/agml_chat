@@ -38,6 +38,7 @@ class ChatCompletionRequest(BaseModel):
     top_p: float = 0.95
     max_new_tokens: int = 256
     research_mode: bool = False
+    enable_thinking: bool = False
 
 
 def _validate_chat_request(request: ChatCompletionRequest) -> None:
@@ -166,6 +167,7 @@ def create_app(engine: ChatEngine, prompt_set: PromptSet, ui_html_path: str) -> 
                 history=history,
                 system_prompt=prompt_set.system_prompt,
                 generation=generation,
+                enable_thinking=request.enable_thinking,
             )
             draft = None
 
@@ -206,6 +208,7 @@ def create_app(engine: ChatEngine, prompt_set: PromptSet, ui_html_path: str) -> 
                 history=history,
                 system_prompt=prompt_set.system_prompt,
                 generation=generation,
+                enable_thinking=request.enable_thinking,
             ):
                 yield f"data: {json.dumps({'token': token})}\n\n"
 

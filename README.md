@@ -1,6 +1,6 @@
 # agml-chat
 
-`agml-chat` is a nanochat-style scaffold (https://github.com/karpathy/nanochat/tree/master) for multimodal supervised fine-tuning on AgML image classification datasets.
+`agml-chat` is a nanochat-style scaffold for multimodal supervised fine-tuning on AgML image classification datasets.
 
 It keeps a familiar `scripts/` entrypoint structure (`chat_sft.py`, `chat_cli.py`, `chat_web.py`) while replacing language-only data with image+text chat supervision.
 
@@ -87,10 +87,10 @@ Each row includes:
 
 ```bash
 uv run -m scripts.chat_sft \
-  --model-name Qwen/Qwen2.5-VL-3B-Instruct \
+  --model-name google/gemma-4-E2B-it \
   --train-jsonl data/agml_sft/train.jsonl \
   --val-jsonl data/agml_sft/val.jsonl \
-  --output-dir runs/sft_qwen25vl3b \
+  --output-dir runs/sft_gemma4_e2b_it \
   --epochs 1 \
   --per-device-train-batch-size 1 \
   --gradient-accumulation-steps 8
@@ -100,15 +100,18 @@ Notes:
 
 - LoRA is enabled by default (`--no-lora` to disable)
 - Flash attention path is enabled by default (`--no-flash-attn` to disable)
+- Gemma 4 E2B-it thinking mode is opt-in (`--enable-thinking` in the CLI/web runtime paths)
 - Final model artifacts are saved to `runs/.../final`
 
 ## 4) Chat With the Model (CLI)
 
 ```bash
 uv run -m scripts.chat_cli \
-  --model runs/sft_qwen25vl3b/final \
+  --model runs/sft_gemma4_e2b_it/final \
   --image /path/to/leaf.jpg
 ```
+
+To enable Gemma thinking mode, add `--enable-thinking` when launching `chat_cli.py` or set `enable_thinking` in the web request payload.
 
 CLI commands:
 
@@ -121,7 +124,7 @@ CLI commands:
 
 ```bash
 uv run -m scripts.chat_web \
-  --model runs/sft_qwen25vl3b/final \
+  --model runs/sft_gemma4_e2b_it/final \
   --host 0.0.0.0 \
   --port 8000
 ```
@@ -144,6 +147,7 @@ Key configurable templates:
 `agml-chat` includes a model-family chat-template adapter layer.
 
 - Qwen2.5-VL and Qwen3-VL models are auto-detected and normalized into typed multimodal content blocks before `apply_chat_template`.
+- Gemma 4 E2B-it is detected separately and can opt into `enable_thinking` without changing the default prompt path.
 - Normalization is applied in both inference (`chat_cli.py`, `chat_web.py`) and SFT collation (`chat_sft.py` path), so prompt/history/image formatting stays consistent.
 - Non-Qwen models use the generic adapter path, preserving existing behavior.
 - The adapter registry is extensible for adding future model-family formatters without changing dataset export format.
@@ -155,6 +159,7 @@ The web chat server includes request validation and abuse-prevention limits:
 - max messages per request
 - max message length and total conversation length
 - bounded generation params (`temperature`, `top_p`, `max_new_tokens`)
+
 ## Scaling Guidance
 
 To scale across models and datasets:
@@ -170,6 +175,7 @@ To scale across models and datasets:
 - Current AgML conversion targets image classification only.
 - Evaluation metrics are not yet included in this first scaffold.
 - Additional VLM families beyond Qwen may need family-specific adapter entries.
+- Gemma thinking mode is available only as an opt-in runtime toggle.
 
 ## Quick Start Script
 

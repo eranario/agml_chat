@@ -22,6 +22,11 @@ def test_detect_model_family_generic_non_qwen() -> None:
     assert family == ModelFamily.GENERIC
 
 
+def test_detect_model_family_gemma_4_e2b_it() -> None:
+    family = detect_model_family("google/gemma-4-E2B-it")
+    assert family == ModelFamily.GEMMA_VL
+
+
 def test_normalize_qwen_messages_converts_all_turns_to_typed_blocks() -> None:
     messages = [
         {"role": "system", "content": "You are helpful."},
@@ -50,3 +55,23 @@ def test_normalize_generic_messages_preserves_string_content() -> None:
     normalized = normalize_messages_for_family(messages=messages, family=ModelFamily.GENERIC)
     assert normalized[0]["content"] == "Keep as string"
     assert normalized[1]["content"] == "Also string"
+
+
+def test_normalize_gemma_messages_converts_all_turns_to_typed_blocks() -> None:
+    messages = [
+        {"role": "system", "content": "You are helpful."},
+        {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Classify this crop."}]},
+        {"role": "assistant", "content": "healthy"},
+    ]
+
+    normalized = normalize_messages_for_family(
+        messages=messages,
+        family=ModelFamily.GEMMA_VL,
+        image_path="/tmp/leaf.png",
+    )
+
+    assert isinstance(normalized[0]["content"], list)
+    assert normalized[0]["content"][0] == {"type": "text", "text": "You are helpful."}
+    assert normalized[1]["content"][0]["type"] == "image"
+    assert normalized[1]["content"][0]["image"] == "/tmp/leaf.png"
+    assert normalized[2]["content"][0] == {"type": "text", "text": "healthy"}
