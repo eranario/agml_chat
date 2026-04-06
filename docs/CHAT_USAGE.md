@@ -1,0 +1,110 @@
+# Chat Usage Guide (CLI and Web UI)
+
+This guide explains how to run chat inference in two modes:
+
+- CLI chat for lower overhead and easier memory control.
+- Web chat UI for browser-based interaction.
+
+## Prerequisites
+
+From the repository root:
+
+```bash
+uv sync --extra cpu
+# or, if you have supported GPU setup:
+# uv sync --extra gpu
+source .venv/bin/activate
+```
+
+## Option A: CLI Chat (Recommended for constrained hardware)
+
+Run interactive chat:
+
+```bash
+uv run -m scripts.chat_cli \
+  --model runs/sft_gemma4_e2b_it/final \
+  --device cpu \
+  --dtype float32 \
+  --max-new-tokens 128
+```
+
+### Why CLI is usually lighter
+
+- No web server process.
+- No browser tab overhead.
+- Easier to stop cleanly and release memory.
+
+### Useful CLI flags
+
+- `--device`: `auto`, `cuda`, `cpu`, or `mps`.
+- `--dtype`: `float16`, `bfloat16`, or `float32`.
+- `--max-new-tokens`: lowers generation length and memory pressure.
+- `--temperature`, `--top-p`: sampling controls.
+- `--prompt-config`: custom prompt template YAML.
+- `--enable-thinking`: enables Gemma 4 thinking mode when supported.
+- `--no-flash-attn`: disable flash attention path.
+
+### CLI commands at runtime
+
+- `/research on` and `/research off`
+- `/image /path/to/image.jpg`
+- `/clear` clears conversation history (does not unload model)
+- `/quit` exits and releases model memory
+
+### One-shot mode
+
+For short jobs that should exit immediately after one answer:
+
+```bash
+uv run -m scripts.chat_cli \
+  --model runs/sft_gemma4_e2b_it/final \
+  --device cpu \
+  --single-prompt "Identify likely disease symptoms from this image." \
+  --image /path/to/leaf.jpg
+```
+
+## Option B: Web Chat UI
+
+Start the server:
+
+```bash
+uv run -m scripts.chat_web \
+  --model runs/sft_gemma4_e2b_it/final \
+  --host 0.0.0.0 \
+  --port 8000
+```
+
+Open in browser:
+
+- http://localhost:8000
+
+### Web mode notes
+
+- This mode keeps model memory allocated while server is running.
+- Web mode adds FastAPI plus browser overhead compared with CLI.
+- Stop server with Ctrl+C to release memory.
+
+## Memory and process control tips
+
+- Prefer Ctrl+C or `/quit` to stop chat cleanly.
+- Avoid Ctrl+Z for model runs. It suspends the process, and memory usually remains allocated.
+- If you used Ctrl+Z accidentally:
+
+```bash
+jobs
+fg %1
+# then exit with /quit or Ctrl+C
+```
+
+Or terminate the suspended job directly:
+
+```bash
+kill %1
+```
+
+## Suggested low-memory defaults
+
+- Use `--device cpu` for stability on limited unified memory.
+- Start with `--max-new-tokens 64` to `128`.
+- Keep one active chat process at a time.
+- Use smaller model checkpoints where possible.

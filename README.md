@@ -170,6 +170,10 @@ The web chat server includes request validation and abuse-prevention limits:
 - max message length and total conversation length
 - bounded generation params (`temperature`, `top_p`, `max_new_tokens`)
 
+## Chat Docs
+
+For full CLI and browser chat instructions, see `docs/CHAT_USAGE.md`.
+
 ## Scaling Guidance
 
 To scale across models and datasets:
