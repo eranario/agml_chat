@@ -487,5 +487,14 @@ def run_training(config: TrainConfig) -> None:
 
     final_dir = str(Path(config.output_dir) / "final")
     ensure_dir(final_dir)
-    trainer.save_model(final_dir)
+
+    model_to_save = getattr(trainer.model, "module", trainer.model)
+    if getattr(model_to_save, "peft_config", None) is not None:
+        # Persist PEFT adapters explicitly so inference can resolve base model + adapter cleanly.
+        model_to_save.save_pretrained(final_dir)
+        logging.info("Saved LoRA adapter artifacts to %s", final_dir)
+    else:
+        trainer.save_model(final_dir)
+        logging.info("Saved full model artifacts to %s", final_dir)
+
     processor.save_pretrained(final_dir)

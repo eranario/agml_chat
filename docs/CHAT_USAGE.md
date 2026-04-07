@@ -135,7 +135,7 @@ ls -lah runs/sft_20260406_130349/final/preprocessor_config.json
 
 # Run CLI with absolute model path.
 python -m scripts.chat_cli \
-  --model /group/jmearlesgrp/scratch/eranario/agml_chat/runs/sft_20260406_130349/final \
+  --model /output/final \
   --device cuda \
   --dtype float32 \
   --max-new-tokens 128
@@ -150,3 +150,22 @@ ls -lah runs/sft_20260406_130349/checkpoint-5700
 ```
 
 If you prefer to continue training from a checkpoint instead of finalizing it for inference, use the resume commands in `docs/LAMBDA_SCRIPT_RUNBOOK.md` (section `3e`).
+
+```
+python -m scripts.chat_sft \
+--model-name google/gemma-4-E2B-it \
+--train-jsonl data/agml_sft_20260406_130349/train.jsonl \
+--val-jsonl data/agml_sft_20260406_130349/val.jsonl \
+--output-dir runs/sft_20260406_130349_resume2 \
+--resume-from-checkpoint runs/sft_20260406_130349/checkpoint-6240 \
+--max-train-samples 10 \
+--max-eval-samples 1 \
+--device cuda \
+--dtype bfloat16 \
+--epochs 1 \
+--per-device-train-batch-size 1 \
+--gradient-accumulation-steps 8 \
+--save-steps 20 \
+--logging-steps 5 \
+--live-metrics 
+```
