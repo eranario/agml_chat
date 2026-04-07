@@ -158,6 +158,20 @@ PY
 
 If you see `model type 'gemma4' ... Transformers does not recognize this architecture`, rerun with `GEMMA4_TRANSFORMERS_SOURCE=1` (or keep `auto`, which applies source install whenever the model id contains `gemma-4`).
 
+## 3d) Finalize an interrupted checkpoint (no extra training)
+
+If your run stopped before `runs/sft_<RUN_TAG>/final` was created, you can materialize a usable final folder from a checkpoint:
+
+```bash
+cd ~/agml_chat
+uv run -m scripts.finalize_checkpoint \
+  --checkpoint-dir runs/sft_<RUN_TAG>/checkpoint-5700 \
+  --base-model google/gemma-4-E2B-it \
+  --force
+```
+
+Then use `runs/sft_<RUN_TAG>/final` with CLI/Web `--model`.
+
 ## 4) Verify what attention path was used
 
 ```bash

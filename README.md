@@ -154,6 +154,19 @@ uv run -m scripts.chat_web \
 
 Open `http://localhost:8000`.
 
+## 6) Finalize Interrupted Checkpoint (No Training)
+
+If training was interrupted and you only have `checkpoint-*` folders, you can create a runnable `final` folder without resuming training:
+
+```bash
+uv run -m scripts.finalize_checkpoint \
+  --checkpoint-dir runs/sft_20260406_130349/checkpoint-5700 \
+  --base-model google/gemma-4-E2B-it \
+  --force
+```
+
+Then run CLI/Web with the produced `runs/.../final` path.
+
 ## Prompt Customization
 
 Use `configs/prompt_config.example.yaml` as a template and pass it with `--prompt-config` in `prepare_agml_sft.py`, `chat_cli.py`, or `chat_web.py`.
