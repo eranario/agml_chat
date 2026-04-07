@@ -76,7 +76,7 @@ uv run -m scripts.chat_web \
 
 Open in browser:
 
-- http://localhost:8000
+- <http://localhost:8000>
 
 ### Web mode notes
 
@@ -149,9 +149,70 @@ If `finalize_checkpoint` fails, inspect checkpoint contents:
 ls -lah runs/sft_20260406_130349/checkpoint-5700
 ```
 
+### Troubleshooting: legacy LoRA final folder error
+
+If CLI exits with this message:
+
+`ValueError: Detected a legacy checkpoint format: full-model shard files contain LoRA keys, but adapter_config.json is missing.`
+
+then the folder passed to `--model` is a malformed legacy export and should not be used directly.
+
+Use this recovery flow:
+
+```bash
+cd /group/jmearlesgrp/scratch/eranario/agml_chat
+source .venv/bin/activate
+
+# 1) Find a checkpoint that still has adapter metadata.
+ls -d runs/sft_20260406_130349_resume3/checkpoint-* \
+| while read d; do [[ -f "$d/adapter_config.json" ]] && echo "$d"; done
+
+# 2) Rebuild a clean final folder from one of those checkpoints.
+python -m scripts.finalize_checkpoint \
+  --checkpoint-dir runs/sft_20260406_130349_resume3/checkpoint-6931 \
+  --output-dir runs/sft_20260406_130349_resume3/final_fixed \
+  --trust-remote-code \
+  --force
+
+# 3) Run chat against the rebuilt folder (not the old /final).
+python -m scripts.chat_cli \
+  --model /group/jmearlesgrp/scratch/eranario/agml_chat/runs/sft_20260406_130349_resume3/final_fixed \
+  --device cuda \
+  --dtype float32 \
+  --max-new-tokens 128
+```
+
+Important:
+
+- Do not keep using the old `runs/.../final` that raised the error.
+- Use a new output dir such as `final_fixed` to avoid mixing files.
+
+If step 1 prints nothing (no checkpoint contains `adapter_config.json`), recover a PEFT adapter package directly from the malformed legacy folder:
+
+```bash
+python -m scripts.recover_legacy_lora_adapter \
+  --legacy-model-dir runs/sft_20260406_130349_resume3/final \
+  --output-dir runs/sft_20260406_130349_resume3/final_recovered_adapter \
+  --base-model google/gemma-4-E2B-it \
+  --lora-alpha 32 \
+  --lora-dropout 0.05 \
+  --force
+
+python -m scripts.chat_cli \
+  --model /group/jmearlesgrp/scratch/eranario/agml_chat/runs/sft_20260406_130349_resume3/final_recovered_adapter \
+  --device cuda \
+  --dtype float32 \
+  --max-new-tokens 128
+```
+
+Notes for recovered adapters:
+
+- `--base-model` must match the model used during SFT.
+- If rank inference fails, rerun with `--lora-r 16` (or your training rank).
+
 If you prefer to continue training from a checkpoint instead of finalizing it for inference, use the resume commands in `docs/LAMBDA_SCRIPT_RUNBOOK.md` (section `3e`).
 
-```
+```bash
 python -m scripts.chat_sft \
 --model-name google/gemma-4-E2B-it \
 --train-jsonl data/agml_sft_20260406_130349/train.jsonl \
