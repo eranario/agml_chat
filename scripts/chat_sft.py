@@ -17,6 +17,12 @@ def main() -> None:
     parser.add_argument("--train-jsonl", type=str, required=True, help="Path to train.jsonl")
     parser.add_argument("--val-jsonl", type=str, default=None, help="Optional path to val.jsonl")
     parser.add_argument("--output-dir", type=str, default="runs/sft")
+    parser.add_argument(
+        "--resume-from-checkpoint",
+        type=str,
+        default=None,
+        help="Path to checkpoint directory to resume training from",
+    )
 
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu", "mps"])
     parser.add_argument(
@@ -39,6 +45,18 @@ def main() -> None:
     parser.add_argument("--gradient-accumulation-steps", type=int, default=8)
     parser.add_argument("--dataloader-num-workers", type=int, default=2)
     parser.add_argument("--max-length", type=int, default=2048)
+    parser.add_argument(
+        "--max-train-samples",
+        type=int,
+        default=None,
+        help="Optional cap on train examples loaded from train-jsonl",
+    )
+    parser.add_argument(
+        "--max-eval-samples",
+        type=int,
+        default=None,
+        help="Optional cap on eval examples loaded from val-jsonl",
+    )
 
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument("--eval-steps", type=int, default=100)
@@ -78,6 +96,7 @@ def main() -> None:
         train_jsonl=args.train_jsonl,
         val_jsonl=args.val_jsonl,
         output_dir=args.output_dir,
+        resume_from_checkpoint=args.resume_from_checkpoint,
         seed=args.seed,
         device=args.device,
         dtype=args.dtype,
@@ -91,6 +110,8 @@ def main() -> None:
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         dataloader_num_workers=args.dataloader_num_workers,
         max_length=args.max_length,
+        max_train_samples=args.max_train_samples,
+        max_eval_samples=args.max_eval_samples,
         logging_steps=args.logging_steps,
         eval_steps=args.eval_steps,
         save_steps=args.save_steps,

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from torch.utils.data import Subset
 from transformers import Trainer, TrainerCallback, TrainingArguments
 from transformers import __version__ as transformers_version
 
@@ -27,6 +28,7 @@ class TrainConfig:
     model_name: str
     train_jsonl: str
     output_dir: str
+    resume_from_checkpoint: str | None = None
     val_jsonl: str | None = None
     seed: int = 42
     device: str = "auto"
@@ -44,6 +46,8 @@ class TrainConfig:
     gradient_accumulation_steps: int = 8
     dataloader_num_workers: int = 2
     max_length: int = 2048
+    max_train_samples: int | None = None
+    max_eval_samples: int | None = None
 
     logging_steps: int = 10
     eval_steps: int = 100
@@ -119,6 +123,18 @@ class VisionLanguageSFTCollator:
 
         batch["labels"] = labels
         return batch
+
+
+def _apply_sample_cap(dataset: Any, max_samples: int | None, name: str) -> Any:
+    if max_samples is None:
+        return dataset
+    if max_samples <= 0:
+        raise ValueError(f"{name} sample cap must be > 0 when provided.")
+
+    capped = min(len(dataset), max_samples)
+    if capped < len(dataset):
+        logging.info("Using %d/%d %s samples.", capped, len(dataset), name)
+    return Subset(dataset, list(range(capped)))
 
 
 def _is_scalar_number(value: Any) -> bool:
@@ -392,11 +408,14 @@ def run_training(config: TrainConfig) -> None:
     )
 
     train_dataset = VisionChatJsonlDataset(config.train_jsonl)
+    train_dataset = _apply_sample_cap(train_dataset, config.max_train_samples, "train")
+
     eval_dataset = None
     if config.val_jsonl:
         val_path = Path(config.val_jsonl)
         if val_path.exists():
             eval_dataset = VisionChatJsonlDataset(config.val_jsonl)
+            eval_dataset = _apply_sample_cap(eval_dataset, config.max_eval_samples, "eval")
         else:
             logging.warning(
                 "Validation JSONL not found at '%s'; continuing with train-only (evaluation disabled).",
@@ -453,7 +472,7 @@ def run_training(config: TrainConfig) -> None:
         callbacks=callbacks,
     )
 
-    trainer.train()
+    trainer.train(resume_from_checkpoint=config.resume_from_checkpoint)
 
     if config.export_metrics:
         metrics_output = export_training_metrics(

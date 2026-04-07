@@ -164,13 +164,69 @@ If your run stopped before `runs/sft_<RUN_TAG>/final` was created, you can mater
 
 ```bash
 cd ~/agml_chat
-uv run -m scripts.finalize_checkpoint \
+source .venv/bin/activate
+uv pip install --python .venv/bin/python --upgrade "git+https://github.com/huggingface/transformers.git"
+python -m scripts.finalize_checkpoint \
   --checkpoint-dir runs/sft_<RUN_TAG>/checkpoint-5700 \
+  --output-dir runs/sft_<RUN_TAG>/final \
   --base-model google/gemma-4-E2B-it \
+  --trust-remote-code \
   --force
+
+ls -lah runs/sft_<RUN_TAG>/final
+
+python -m scripts.chat_cli \
+  --model "$(pwd)/runs/sft_<RUN_TAG>/final" \
+  --device cuda \
+  --dtype float32 \
+  --max-new-tokens 128
 ```
 
-Then use `runs/sft_<RUN_TAG>/final` with CLI/Web `--model`.
+Note: prefer `python -m ...` after manually upgrading Transformers from source. `uv run` may reconcile packages back to the lock state and undo your local upgrade.
+
+## 3e) Resume training from an existing checkpoint
+
+Use this when you want to continue optimization from a prior `checkpoint-*` directory.
+
+```bash
+cd ~/agml_chat
+source .venv/bin/activate
+
+python -m scripts.chat_sft \
+  --model-name google/gemma-4-E2B-it \
+  --train-jsonl data/agml_sft_<RUN_TAG>/train.jsonl \
+  --val-jsonl data/agml_sft_<RUN_TAG>/val.jsonl \
+  --output-dir runs/sft_<RUN_TAG> \
+  --resume-from-checkpoint runs/sft_<RUN_TAG>/checkpoint-5700 \
+  --device cuda \
+  --dtype float32 \
+  --epochs 1 \
+  --per-device-train-batch-size 1 \
+  --gradient-accumulation-steps 8 \
+  --live-metrics
+```
+
+Resume only a subset of data (useful for quick continuation/debug):
+
+```bash
+cd ~/agml_chat
+source .venv/bin/activate
+
+python -m scripts.chat_sft \
+  --model-name google/gemma-4-E2B-it \
+  --train-jsonl data/agml_sft_<RUN_TAG>/train.jsonl \
+  --val-jsonl data/agml_sft_<RUN_TAG>/val.jsonl \
+  --output-dir runs/sft_<RUN_TAG> \
+  --resume-from-checkpoint runs/sft_<RUN_TAG>/checkpoint-5700 \
+  --max-train-samples 2000 \
+  --max-eval-samples 200 \
+  --device cuda \
+  --dtype float32 \
+  --epochs 1 \
+  --per-device-train-batch-size 1 \
+  --gradient-accumulation-steps 8 \
+  --live-metrics
+```
 
 ## 4) Verify what attention path was used
 
@@ -236,8 +292,8 @@ Use these as environment variables before `bash runs/lambda_full_pipeline.sh`.
 
 | Flag | Default | Description |
 |---|---|---|
-| `TRAIN_RATIO` | `1.0` | Train split ratio. |
-| `VAL_RATIO` | `0.0` | Val split ratio. |
+| `TRAIN_RATIO` | `0.9` | Train split ratio. |
+| `VAL_RATIO` | `0.1` | Val split ratio. |
 | `TEST_RATIO` | `0.0` | Test split ratio. |
 | `SEED` | `42` | Split and sampling seed. |
 | `MAX_SAMPLES_PER_DATASET` | empty | Optional cap per dataset before splitting. |
@@ -254,6 +310,9 @@ Use these as environment variables before `bash runs/lambda_full_pipeline.sh`.
 | `MAX_LENGTH` | `2048` | Token sequence length for processor/training. |
 | `LEARNING_RATE` | `2e-5` | Learning rate. |
 | `WARMUP_RATIO` | `0.03` | LR warmup ratio. |
+| `RESUME_FROM_CHECKPOINT` | n/a (CLI flag only) | Resume training state from an existing `checkpoint-*` path. |
+| `MAX_TRAIN_SAMPLES` | n/a (CLI flag only) | Cap number of training examples used from `train.jsonl`. |
+| `MAX_EVAL_SAMPLES` | n/a (CLI flag only) | Cap number of validation examples used from `val.jsonl`. |
 
 ### LoRA
 

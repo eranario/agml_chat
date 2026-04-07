@@ -126,6 +126,30 @@ Metrics artifacts created per training run:
 
 If needed, disable this export with `--no-metrics-export`.
 
+Resume from a saved checkpoint:
+
+```bash
+python -m scripts.chat_sft \
+  --model-name google/gemma-4-E2B-it \
+  --train-jsonl data/agml_sft/train.jsonl \
+  --val-jsonl data/agml_sft/val.jsonl \
+  --output-dir runs/sft_gemma4_e2b_it \
+  --resume-from-checkpoint runs/sft_gemma4_e2b_it/checkpoint-5700
+```
+
+Resume on only part of the dataset:
+
+```bash
+python -m scripts.chat_sft \
+  --model-name google/gemma-4-E2B-it \
+  --train-jsonl data/agml_sft/train.jsonl \
+  --val-jsonl data/agml_sft/val.jsonl \
+  --output-dir runs/sft_gemma4_e2b_it \
+  --resume-from-checkpoint runs/sft_gemma4_e2b_it/checkpoint-5700 \
+  --max-train-samples 2000 \
+  --max-eval-samples 200
+```
+
 ## 4) Chat With the Model (CLI)
 
 ```bash

@@ -122,7 +122,7 @@ source .venv/bin/activate
 uv pip install --python .venv/bin/python --upgrade "git+https://github.com/huggingface/transformers.git"
 
 # Materialize a final folder from checkpoint (no training).
-uv run --extra gpu -m scripts.finalize_checkpoint \
+python -m scripts.finalize_checkpoint \
   --checkpoint-dir runs/sft_20260406_130349/checkpoint-5700 \
   --output-dir runs/sft_20260406_130349/final \
   --base-model google/gemma-4-E2B-it \
@@ -131,17 +131,22 @@ uv run --extra gpu -m scripts.finalize_checkpoint \
 
 # Verify final folder has model + processor/tokenizer files.
 ls -lah runs/sft_20260406_130349/final
+ls -lah runs/sft_20260406_130349/final/preprocessor_config.json
 
 # Run CLI with absolute model path.
-uv run --extra gpu -m scripts.chat_cli \
+python -m scripts.chat_cli \
   --model /group/jmearlesgrp/scratch/eranario/agml_chat/runs/sft_20260406_130349/final \
   --device cuda \
   --dtype float32 \
   --max-new-tokens 128
 ```
 
+Note: after a manual Transformers source upgrade, prefer `python -m ...` from the activated `.venv`. `uv run` may reconcile packages and roll Transformers back to the lockfile version.
+
 If `finalize_checkpoint` fails, inspect checkpoint contents:
 
 ```bash
 ls -lah runs/sft_20260406_130349/checkpoint-5700
 ```
+
+If you prefer to continue training from a checkpoint instead of finalizing it for inference, use the resume commands in `docs/LAMBDA_SCRIPT_RUNBOOK.md` (section `3e`).
