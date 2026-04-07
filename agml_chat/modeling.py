@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
+import json
 from pathlib import Path
 from typing import Any
-import json
 
 import torch
 from peft import LoraConfig, PeftConfig, PeftModel, get_peft_model
@@ -60,6 +60,8 @@ def _try_model_loader(loader: Any, model_name: str, kwargs: dict) -> torch.nn.Mo
 
 def _looks_like_legacy_lora_full_checkpoint(path: Path) -> bool:
     """Detect full-model checkpoints that accidentally contain PEFT LoRA keys."""
+    key_markers = (".lora_A.", ".lora_B.", ".base_layer.")
+
     index_candidates = [
         path / "model.safetensors.index.json",
         path / "pytorch_model.bin.index.json",
@@ -73,10 +75,27 @@ def _looks_like_legacy_lora_full_checkpoint(path: Path) -> bool:
             if not isinstance(weight_map, dict):
                 continue
             for key in weight_map:
-                if ".lora_A." in key or ".lora_B." in key or ".base_layer." in key:
+                if any(marker in key for marker in key_markers):
                     return True
         except Exception:
             continue
+
+    # Some malformed exports omit index files and only ship one or more .safetensors shards.
+    # Inspect tensor names from safetensors headers without materializing tensor data.
+    try:
+        from safetensors import safe_open
+    except Exception:
+        return False
+
+    for tensor_file in sorted(path.glob("*.safetensors")):
+        try:
+            with safe_open(tensor_file, framework="pt") as handle:
+                for key in handle.keys():
+                    if any(marker in key for marker in key_markers):
+                        return True
+        except Exception:
+            continue
+
     return False
 
 

@@ -81,3 +81,20 @@ def test_resolve_legacy_lora_full_checkpoint_raises(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="legacy checkpoint format"):
         _resolve_base_model_for_adapter(str(model_dir))
+
+
+def test_detect_legacy_lora_full_checkpoint_from_safetensors_only(tmp_path: Path) -> None:
+    safetensors = pytest.importorskip("safetensors.torch")
+    import torch
+
+    model_dir = tmp_path / "legacy_no_index"
+    model_dir.mkdir()
+    safetensors.save_file(
+        {
+            "model.language_model.layers.0.self_attn.q_proj.lora_A.default.weight": torch.zeros((2, 2)),
+            "model.language_model.layers.0.self_attn.q_proj.base_layer.weight": torch.zeros((2, 2)),
+        },
+        str(model_dir / "model.safetensors"),
+    )
+
+    assert _looks_like_legacy_lora_full_checkpoint(model_dir)
