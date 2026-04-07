@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
 import torch
-from peft import LoraConfig, PeftModel, get_peft_model
+from peft import LoraConfig, PeftConfig, PeftModel, get_peft_model
 import transformers
 from transformers import AutoModelForCausalLM, AutoProcessor
 
@@ -59,26 +58,36 @@ def _try_model_loader(loader: Any, model_name: str, kwargs: dict) -> torch.nn.Mo
 
 
 def _resolve_base_model_for_adapter(model_name: str) -> tuple[str, str | None]:
-    """Return (base_model_name, adapter_path) when model_name points to a local PEFT adapter dir."""
+    """Return (base_model_name, adapter_path) when model_name points to a PEFT adapter."""
     path = Path(model_name)
-    if not path.exists() or not path.is_dir():
-        return model_name, None
-
     adapter_config_path = path / "adapter_config.json"
-    if not adapter_config_path.exists():
+
+    # Fast-path: local adapter directories with adapter_config.json present.
+    if path.exists() and path.is_dir() and adapter_config_path.exists():
+        try:
+            peft_cfg = PeftConfig.from_pretrained(str(path))
+        except Exception as exc:
+            raise ValueError(f"Failed to parse adapter config at {adapter_config_path}: {exc}") from exc
+
+        base_model_name = getattr(peft_cfg, "base_model_name_or_path", None)
+        if not base_model_name:
+            raise ValueError(
+                f"Adapter config at {adapter_config_path} is missing 'base_model_name_or_path'."
+            )
+        return str(base_model_name), str(path)
+
+    # Fallback: handle adapter repos on the Hub (or cached adapters) by probing PEFT config.
+    try:
+        peft_cfg = PeftConfig.from_pretrained(model_name)
+    except Exception:
         return model_name, None
 
-    try:
-        adapter_cfg = json.loads(adapter_config_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        raise ValueError(f"Failed to parse adapter config at {adapter_config_path}: {exc}") from exc
-
-    base_model_name = adapter_cfg.get("base_model_name_or_path")
+    base_model_name = getattr(peft_cfg, "base_model_name_or_path", None)
     if not base_model_name:
         raise ValueError(
-            f"Adapter config at {adapter_config_path} is missing 'base_model_name_or_path'."
+            f"PEFT config for '{model_name}' is missing 'base_model_name_or_path'."
         )
-    return str(base_model_name), str(path)
+    return str(base_model_name), model_name
 
 
 
@@ -89,6 +98,12 @@ def load_model_and_processor(
     trust_remote_code: bool = True,
 ) -> tuple[torch.nn.Module, Any, ModelFamily]:
     base_model_name, adapter_path = _resolve_base_model_for_adapter(model_name)
+    logging.info(
+        "Model resolution: input=%s base=%s adapter=%s",
+        model_name,
+        base_model_name,
+        adapter_path if adapter_path is not None else "<none>",
+    )
 
     processor = None
     processor_sources = [model_name]
