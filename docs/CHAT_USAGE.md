@@ -108,3 +108,40 @@ kill %1
 - Start with `--max-new-tokens 64` to `128`.
 - Keep one active chat process at a time.
 - Use smaller model checkpoints where possible.
+
+## Checkpoint Recovery (No More Training)
+
+If training stopped before `runs/.../final` was created, use this exact sequence to create a runnable final folder from a checkpoint and launch CLI.
+
+```bash
+cd /group/jmearlesgrp/scratch/eranario/agml_chat
+git pull
+source .venv/bin/activate
+
+# Gemma 4 compatibility: make sure Transformers is recent enough.
+uv pip install --python .venv/bin/python --upgrade "git+https://github.com/huggingface/transformers.git"
+
+# Materialize a final folder from checkpoint (no training).
+uv run --extra gpu -m scripts.finalize_checkpoint \
+  --checkpoint-dir runs/sft_20260406_130349/checkpoint-5700 \
+  --output-dir runs/sft_20260406_130349/final \
+  --base-model google/gemma-4-E2B-it \
+  --trust-remote-code \
+  --force
+
+# Verify final folder has model + processor/tokenizer files.
+ls -lah runs/sft_20260406_130349/final
+
+# Run CLI with absolute model path.
+uv run --extra gpu -m scripts.chat_cli \
+  --model /group/jmearlesgrp/scratch/eranario/agml_chat/runs/sft_20260406_130349/final \
+  --device cuda \
+  --dtype float32 \
+  --max-new-tokens 128
+```
+
+If `finalize_checkpoint` fails, inspect checkpoint contents:
+
+```bash
+ls -lah runs/sft_20260406_130349/checkpoint-5700
+```

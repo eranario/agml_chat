@@ -6,7 +6,7 @@ import json
 import shutil
 from pathlib import Path
 
-from transformers import AutoProcessor
+from transformers import AutoFeatureExtractor, AutoImageProcessor, AutoProcessor, AutoTokenizer
 
 
 def _read_base_model_from_adapter_config(checkpoint_dir: Path) -> str | None:
@@ -37,6 +37,31 @@ def _materialize_checkpoint(checkpoint_dir: Path, output_dir: Path, force: bool)
         shutil.rmtree(output_dir)
 
     shutil.copytree(checkpoint_dir, output_dir)
+
+
+def _save_preprocessing_artifacts(base_model: str, output_dir: Path, trust_remote_code: bool) -> None:
+    # Save any available processor/tokenizer/image configs to maximize compatibility
+    # with model-specific Auto* loading paths.
+    processor = AutoProcessor.from_pretrained(base_model, trust_remote_code=trust_remote_code)
+    processor.save_pretrained(output_dir)
+
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=trust_remote_code)
+        tokenizer.save_pretrained(output_dir)
+    except Exception:
+        pass
+
+    try:
+        image_processor = AutoImageProcessor.from_pretrained(base_model, trust_remote_code=trust_remote_code)
+        image_processor.save_pretrained(output_dir)
+    except Exception:
+        pass
+
+    try:
+        feature_extractor = AutoFeatureExtractor.from_pretrained(base_model, trust_remote_code=trust_remote_code)
+        feature_extractor.save_pretrained(output_dir)
+    except Exception:
+        pass
 
 
 def main() -> None:
@@ -91,8 +116,18 @@ def main() -> None:
 
     _materialize_checkpoint(checkpoint_dir=checkpoint_dir, output_dir=output_dir, force=args.force)
 
-    processor = AutoProcessor.from_pretrained(base_model, trust_remote_code=args.trust_remote_code)
-    processor.save_pretrained(output_dir)
+    _save_preprocessing_artifacts(
+        base_model=base_model,
+        output_dir=output_dir,
+        trust_remote_code=args.trust_remote_code,
+    )
+
+    preprocessor_cfg = output_dir / "preprocessor_config.json"
+    if not preprocessor_cfg.exists():
+        print(
+            "Warning: preprocessor_config.json was not created. "
+            "If chat loading fails, verify the base model id and transformers version."
+        )
 
     print("Finalized checkpoint for inference.")
     print(f"Use this with CLI/Web --model: {output_dir}")
