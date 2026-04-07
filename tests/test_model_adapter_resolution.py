@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from agml_chat.modeling import _resolve_base_model_for_adapter
+from agml_chat.modeling import _looks_like_legacy_lora_full_checkpoint, _resolve_base_model_for_adapter
 
 
 def test_resolve_base_model_non_adapter_path(tmp_path: Path) -> None:
@@ -51,3 +52,32 @@ def test_resolve_remote_adapter_via_peft_config(monkeypatch: pytest.MonkeyPatch)
     base, adapter = _resolve_base_model_for_adapter("eranario/agml-chat-lora")
     assert base == "google/gemma-3-4b-it"
     assert adapter == "eranario/agml-chat-lora"
+
+
+def test_detect_legacy_lora_full_checkpoint(tmp_path: Path) -> None:
+    model_dir = tmp_path / "legacy"
+    model_dir.mkdir()
+    payload = {
+        "weight_map": {
+            "model.language_model.layers.0.self_attn.q_proj.lora_A.default.weight": "model-00001.safetensors",
+            "model.language_model.layers.0.self_attn.q_proj.base_layer.weight": "model-00001.safetensors",
+        }
+    }
+    (model_dir / "model.safetensors.index.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    assert _looks_like_legacy_lora_full_checkpoint(model_dir)
+
+
+def test_resolve_legacy_lora_full_checkpoint_raises(tmp_path: Path) -> None:
+    model_dir = tmp_path / "legacy"
+    model_dir.mkdir()
+    payload = {
+        "weight_map": {
+            "model.language_model.layers.0.self_attn.q_proj.lora_A.default.weight": "model-00001.safetensors",
+            "model.language_model.layers.0.self_attn.q_proj.base_layer.weight": "model-00001.safetensors",
+        }
+    }
+    (model_dir / "model.safetensors.index.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="legacy checkpoint format"):
+        _resolve_base_model_for_adapter(str(model_dir))

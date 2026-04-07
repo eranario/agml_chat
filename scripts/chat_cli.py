@@ -35,8 +35,11 @@ def main() -> None:
     parser.add_argument("--single-prompt", type=str, default=None, help="Run one prompt and exit")
     args = parser.parse_args()
     from agml_chat.engine import ChatEngine, GenerationConfig
+    from agml_chat.common import configure_logging
     from agml_chat.prompts import load_prompt_set
     from agml_chat.research import run_research_mode
+
+    configure_logging("INFO")
 
     prompt_set = load_prompt_set(args.prompt_config)
     engine = ChatEngine.from_pretrained(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any
+import json
 
 import torch
 from peft import LoraConfig, PeftConfig, PeftModel, get_peft_model
@@ -57,6 +58,28 @@ def _try_model_loader(loader: Any, model_name: str, kwargs: dict) -> torch.nn.Mo
         return None
 
 
+def _looks_like_legacy_lora_full_checkpoint(path: Path) -> bool:
+    """Detect full-model checkpoints that accidentally contain PEFT LoRA keys."""
+    index_candidates = [
+        path / "model.safetensors.index.json",
+        path / "pytorch_model.bin.index.json",
+    ]
+    for index_path in index_candidates:
+        if not index_path.exists():
+            continue
+        try:
+            data = json.loads(index_path.read_text(encoding="utf-8"))
+            weight_map = data.get("weight_map", {})
+            if not isinstance(weight_map, dict):
+                continue
+            for key in weight_map:
+                if ".lora_A." in key or ".lora_B." in key or ".base_layer." in key:
+                    return True
+        except Exception:
+            continue
+    return False
+
+
 def _resolve_base_model_for_adapter(model_name: str) -> tuple[str, str | None]:
     """Return (base_model_name, adapter_path) when model_name points to a PEFT adapter."""
     path = Path(model_name)
@@ -75,6 +98,15 @@ def _resolve_base_model_for_adapter(model_name: str) -> tuple[str, str | None]:
                 f"Adapter config at {adapter_config_path} is missing 'base_model_name_or_path'."
             )
         return str(base_model_name), str(path)
+
+    # Fail fast on legacy checkpoints that contain LoRA keys in full-model shards.
+    if path.exists() and path.is_dir() and _looks_like_legacy_lora_full_checkpoint(path):
+        raise ValueError(
+            "Detected a legacy checkpoint format: full-model shard files contain LoRA keys, "
+            "but adapter_config.json is missing. This cannot be loaded reliably as a base model. "
+            "Use a proper PEFT adapter folder (adapter_config.json + adapter_model.safetensors) "
+            "or re-finalize from a checkpoint that includes adapter artifacts."
+        )
 
     # Fallback: handle adapter repos on the Hub (or cached adapters) by probing PEFT config.
     try:
