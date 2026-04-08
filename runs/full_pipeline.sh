@@ -4,16 +4,16 @@ set -euo pipefail
 # End-to-end remote pipeline for Lambda Labs GPU boxes.
 #
 # Usage:
-#   bash runs/lambda_full_pipeline.sh
+#   bash runs/full_pipeline.sh
 #
 # Optional overrides:
-#   MODEL="Qwen/Qwen2.5-VL-3B-Instruct" DATASETS="plant_village_classification" bash runs/lambda_full_pipeline.sh
-#   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/lambda_full_pipeline.sh
-#   LIVE_METRICS=1 LIVE_METRICS_EVERY_N_LOGS=1 bash runs/lambda_full_pipeline.sh
-#   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/lambda_full_pipeline.sh
-#   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/lambda_full_pipeline.sh
-#   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=1 FLASH_ATTN_FORCE_BUILD=0 FLASH_ATTN_NO_DEPS=1 bash runs/lambda_full_pipeline.sh
-#   GEMMA4_TRANSFORMERS_SOURCE=1 MODEL=google/gemma-4-E2B-it bash runs/lambda_full_pipeline.sh
+#   MODEL="Qwen/Qwen2.5-VL-3B-Instruct" DATASETS="plant_village_classification" bash runs/full_pipeline.sh
+#   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/full_pipeline.sh
+#   LIVE_METRICS=1 LIVE_METRICS_EVERY_N_LOGS=1 bash runs/full_pipeline.sh
+#   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/full_pipeline.sh
+#   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/full_pipeline.sh
+#   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=1 FLASH_ATTN_FORCE_BUILD=0 FLASH_ATTN_NO_DEPS=1 bash runs/full_pipeline.sh
+#   GEMMA4_TRANSFORMERS_SOURCE=1 MODEL=google/gemma-4-E2B-it bash runs/full_pipeline.sh
 
 REPO_DIR="${REPO_DIR:-$(pwd)}"
 UPDATE_REPO="${UPDATE_REPO:-0}"

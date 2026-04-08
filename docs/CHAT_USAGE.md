@@ -210,7 +210,7 @@ Notes for recovered adapters:
 - `--base-model` must match the model used during SFT.
 - If rank inference fails, rerun with `--lora-r 16` (or your training rank).
 
-If you prefer to continue training from a checkpoint instead of finalizing it for inference, use the resume commands in `docs/LAMBDA_SCRIPT_RUNBOOK.md` (section `3e`).
+If you prefer to continue training from a checkpoint instead of finalizing it for inference, use the resume commands in `docs/FULL_PIPELINE_RUNBOOK.md` (section `3e`).
 
 ```bash
 python -m scripts.chat_sft \

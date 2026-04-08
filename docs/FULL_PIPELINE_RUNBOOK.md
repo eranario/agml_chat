@@ -1,6 +1,6 @@
 # Lambda Bash Script Runbook
 
-This runbook is for `runs/lambda_full_pipeline.sh`.
+This runbook is for `runs/full_pipeline.sh`.
 
 ## 1) Fresh start (recommended)
 
@@ -30,7 +30,7 @@ FLASH_ATTN_MAX_JOBS=1 \
 FLASH_ATTN_NVCC_THREADS=1 \
 FLASH_ATTN_TORCH_CUDA_ARCH_LIST=9.0 \
 FLASH_ATTN_RETRY_MINIMAL=1 \
-bash runs/lambda_full_pipeline.sh
+bash runs/full_pipeline.sh
 ```
 
 Allow fallback to SDPA:
@@ -48,7 +48,7 @@ STRICT_FLASH_ATTN=0 \
 FLASH_ATTN_MAX_JOBS=1 \
 FLASH_ATTN_NVCC_THREADS=1 \
 FLASH_ATTN_TORCH_CUDA_ARCH_LIST=9.0 \
-bash runs/lambda_full_pipeline.sh
+bash runs/full_pipeline.sh
 ```
 
 ## 2) Strict FlashAttention run (fail if FlashAttention is not active)
@@ -73,7 +73,7 @@ GRAD_ACCUM=1 \
 LORA_R=64 \
 LORA_ALPHA=128 \
 LORA_DROPOUT=0.05 \
-bash runs/lambda_full_pipeline.sh
+bash runs/full_pipeline.sh
 ```
 
 If this fails, check:
@@ -96,7 +96,7 @@ STRICT_FLASH_ATTN=0 \
 FLASH_ATTN_MAX_JOBS=2 \
 FLASH_ATTN_NVCC_THREADS=1 \
 FLASH_ATTN_TORCH_CUDA_ARCH_LIST=9.0 \
-bash runs/lambda_full_pipeline.sh
+bash runs/full_pipeline.sh
 ```
 
 ## 3b) Run explicitly without FlashAttention (force SDPA)
@@ -108,7 +108,7 @@ AUTO_FIX_TORCH_STACK=1 \
 GPU_WHEEL_TAG=auto \
 NO_FLASH_ATTN=1 \
 STRICT_FLASH_ATTN=0 \
-bash runs/lambda_full_pipeline.sh
+bash runs/full_pipeline.sh
 ```
 
 ## 3c) Gemma 4 E2B-it run with metrics dashboards
@@ -127,7 +127,7 @@ TEST_RATIO=0.0 \
 PER_DEVICE_TRAIN_BATCH_SIZE=1 \
 GRAD_ACCUM=8 \
 NO_FLASH_ATTN=1 \
-bash runs/lambda_full_pipeline.sh
+bash runs/full_pipeline.sh
 ```
 
 Important:
@@ -244,36 +244,36 @@ Expected values:
 - Disable LoRA entirely:
 
 ```bash
-NO_LORA=1 bash runs/lambda_full_pipeline.sh
+NO_LORA=1 bash runs/full_pipeline.sh
 ```
 
 - Disable flash-attn intentionally:
 
 ```bash
-NO_FLASH_ATTN=1 bash runs/lambda_full_pipeline.sh
+NO_FLASH_ATTN=1 bash runs/full_pipeline.sh
 ```
 
 - Disable metrics export intentionally:
 
 ```bash
-NO_METRICS_EXPORT=1 bash runs/lambda_full_pipeline.sh
+NO_METRICS_EXPORT=1 bash runs/full_pipeline.sh
 ```
 
 - Force latest Transformers source install for Gemma 4:
 
 ```bash
-GEMMA4_TRANSFORMERS_SOURCE=1 MODEL=google/gemma-4-E2B-it bash runs/lambda_full_pipeline.sh
+GEMMA4_TRANSFORMERS_SOURCE=1 MODEL=google/gemma-4-E2B-it bash runs/full_pipeline.sh
 ```
 
 - Update repo inside script before run:
 
 ```bash
-UPDATE_REPO=1 GIT_REF=main bash runs/lambda_full_pipeline.sh
+UPDATE_REPO=1 GIT_REF=main bash runs/full_pipeline.sh
 ```
 
 ## 6) Script Flags Reference
 
-Use these as environment variables before `bash runs/lambda_full_pipeline.sh`.
+Use these as environment variables before `bash runs/full_pipeline.sh`.
 
 ### Core
 
@@ -370,12 +370,12 @@ GRAD_ACCUM=1 \
 LORA_R=64 \
 LORA_ALPHA=128 \
 LORA_DROPOUT=0.05 \
-bash runs/lambda_full_pipeline.sh
+bash runs/full_pipeline.sh
 ```
 
 ### Batch Size Defaults and How To Change
 
-Defaults in `runs/lambda_full_pipeline.sh`:
+Defaults in `runs/full_pipeline.sh`:
 - `PER_DEVICE_TRAIN_BATCH_SIZE=1`
 - `GRAD_ACCUM=8`
 
@@ -387,10 +387,10 @@ Examples:
 
 ```bash
 # Increase per-device batch, no accumulation
-PER_DEVICE_TRAIN_BATCH_SIZE=8 GRAD_ACCUM=1 bash runs/lambda_full_pipeline.sh
+PER_DEVICE_TRAIN_BATCH_SIZE=8 GRAD_ACCUM=1 bash runs/full_pipeline.sh
 
 # Keep flash-attn off and use bigger batch
-NO_FLASH_ATTN=1 PER_DEVICE_TRAIN_BATCH_SIZE=8 GRAD_ACCUM=1 bash runs/lambda_full_pipeline.sh
+NO_FLASH_ATTN=1 PER_DEVICE_TRAIN_BATCH_SIZE=8 GRAD_ACCUM=1 bash runs/full_pipeline.sh
 ```
 
 ### Example: Force source build only when wheel-first fails
@@ -401,7 +401,7 @@ FLASH_ATTN_FORCE_BUILD=1 \
 FLASH_ATTN_MAX_JOBS=1 \
 FLASH_ATTN_NVCC_THREADS=1 \
 FLASH_ATTN_TORCH_CUDA_ARCH_LIST=9.0 \
-bash runs/lambda_full_pipeline.sh
+bash runs/full_pipeline.sh
 ```
 
 ## 7) Common troubleshooting

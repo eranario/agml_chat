@@ -104,6 +104,25 @@ def _write_adapter_config(
     )
 
 
+def _merge_and_save(base_model: str, adapter_dir: Path, output_dir: Path) -> None:
+    from transformers import AutoModelForCausalLM
+    from peft import PeftModel
+    import torch
+
+    print(f"Loading base model '{base_model}' for merging...")
+    model = AutoModelForCausalLM.from_pretrained(
+        base_model, torch_dtype=torch.float16, device_map="auto"
+    )
+    print(f"Loading recovered adapter from '{adapter_dir}'...")
+    model = PeftModel.from_pretrained(model, str(adapter_dir))
+    print("Merging adapter into base model...")
+    model = model.merge_and_unload()
+    
+    print(f"Saving merged model to '{output_dir}'...")
+    model.save_pretrained(str(output_dir))
+    print("Merge complete.")
+
+
 def _copy_preprocessing_files(legacy_dir: Path, output_dir: Path) -> None:
     file_names = [
         "processor_config.json",
@@ -155,6 +174,7 @@ def main() -> None:
     parser.add_argument("--lora-alpha", type=int, default=32, help="LoRA alpha.")
     parser.add_argument("--lora-dropout", type=float, default=0.05, help="LoRA dropout.")
     parser.add_argument("--force", action="store_true", help="Overwrite output dir if it exists.")
+    parser.add_argument("--merge", action="store_true", help="Merge LoRA weights into base model instead of outputting an adapter alone.")
     args = parser.parse_args()
 
     legacy_dir = Path(args.legacy_model_dir).expanduser().resolve()
@@ -192,13 +212,25 @@ def main() -> None:
     )
     _copy_preprocessing_files(legacy_dir=legacy_dir, output_dir=output_dir)
 
-    print("Recovered adapter package created.")
-    print(f"Legacy source: {legacy_dir}")
-    print(f"Recovered output: {output_dir}")
-    print(f"Base model: {args.base_model}")
-    print(f"Inferred/selected LoRA rank: {lora_r}")
-    print(f"Target modules: {', '.join(sorted(target_modules))}")
-    print("Run chat with --model pointing to the recovered output directory.")
+    if args.merge:
+        print("Starting merge process since --merge was specified...")
+        merged_dir = output_dir.parent / f"{output_dir.name}_merged"
+        if merged_dir.exists() and args.force:
+            import shutil
+            shutil.rmtree(merged_dir)
+        merged_dir.mkdir(parents=True, exist_ok=True)
+        _merge_and_save(base_model=args.base_model, adapter_dir=output_dir, output_dir=merged_dir)
+        _copy_preprocessing_files(legacy_dir=output_dir, output_dir=merged_dir)
+        print(f"Merge output: {merged_dir}")
+        print("Run chat with --model pointing to the merged output directory, or upload it to Hugging Face natively.")
+    else:
+        print("Recovered adapter package created.")
+        print(f"Legacy source: {legacy_dir}")
+        print(f"Recovered output: {output_dir}")
+        print(f"Base model: {args.base_model}")
+        print(f"Inferred/selected LoRA rank: {lora_r}")
+        print(f"Target modules: {', '.join(sorted(target_modules))}")
+        print("Run chat with --model pointing to the recovered output directory. Pass --merge for full merged weights.")
 
 
 if __name__ == "__main__":

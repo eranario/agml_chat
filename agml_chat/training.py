@@ -488,11 +488,13 @@ def run_training(config: TrainConfig) -> None:
     final_dir = str(Path(config.output_dir) / "final")
     ensure_dir(final_dir)
 
-    model_to_save = getattr(trainer.model, "module", trainer.model)
-    if getattr(model_to_save, "peft_config", None) is not None:
-        # Persist PEFT adapters explicitly so inference can resolve base model + adapter cleanly.
+    from transformers.modeling_utils import unwrap_model
+    model_to_save = unwrap_model(trainer.model)
+    if hasattr(model_to_save, "merge_and_unload"):
+        logging.info("Merging LoRA adapters into base model for final export...")
+        model_to_save = model_to_save.merge_and_unload()
         model_to_save.save_pretrained(final_dir)
-        logging.info("Saved LoRA adapter artifacts to %s", final_dir)
+        logging.info("Saved merged full model artifacts to %s", final_dir)
     else:
         trainer.save_model(final_dir)
         logging.info("Saved full model artifacts to %s", final_dir)
