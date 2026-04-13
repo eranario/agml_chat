@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 
 HELP_TEXT = """
@@ -16,6 +17,7 @@ Commands:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Multimodal CLI chat for fine-tuned AgML VLMs")
     parser.add_argument("--model", type=str, required=True, help="Model id/path")
+    parser.add_argument("--token", type=str, default=None, help="Hugging Face token for private repositories")
     parser.add_argument("--prompt-config", type=str, default=None, help="Optional prompt YAML")
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu", "mps"])
     parser.add_argument(
@@ -34,6 +36,14 @@ def main() -> None:
     parser.add_argument("--research", action="store_true", help="Enable research mode")
     parser.add_argument("--single-prompt", type=str, default=None, help="Run one prompt and exit")
     args = parser.parse_args()
+
+    token = args.token or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN")
+    if not token and not os.path.exists(args.model):
+        raise ValueError(
+            "No Hugging Face token provided. Pass --token or set the HF_TOKEN environment variable "
+            "to authenticate and download the model."
+        )
+
     from agml_chat.engine import ChatEngine, GenerationConfig
     from agml_chat.common import configure_logging
     from agml_chat.prompts import load_prompt_set
@@ -47,6 +57,7 @@ def main() -> None:
         device=args.device,
         dtype=args.dtype,
         use_flash_attention=not args.no_flash_attn,
+        token=token,
     )
 
     generation = GenerationConfig(
@@ -83,6 +94,7 @@ def main() -> None:
         return
 
     print("agml-chat CLI")
+    print(f"Runtime Device: {engine.runtime.device}")
     print(HELP_TEXT)
     while True:
         try:

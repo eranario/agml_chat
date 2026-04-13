@@ -46,6 +46,7 @@ class ChatEngine:
         dtype: str | None = None,
         use_flash_attention: bool = True,
         trust_remote_code: bool = True,
+        token: str | None = None,
     ) -> "ChatEngine":
         runtime = build_runtime_config(device=device, dtype=dtype)
         model, processor, model_family = load_model_and_processor(
@@ -53,6 +54,7 @@ class ChatEngine:
             runtime=runtime,
             use_flash_attention=use_flash_attention,
             trust_remote_code=trust_remote_code,
+            token=token,
         )
         model.eval()
         return cls(model=model, processor=processor, runtime=runtime, model_family=model_family)

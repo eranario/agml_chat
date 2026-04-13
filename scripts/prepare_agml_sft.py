@@ -94,6 +94,13 @@ def main() -> None:
     split_ratios = SplitRatios(train=args.train_ratio, val=args.val_ratio, test=args.test_ratio)
     prompt_set = load_prompt_set(args.prompt_config)
 
+    import torch
+    if torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
+        print(f"Hardware Check: Detected GPU: {gpu_name} (CUDA {torch.version.cuda})")
+    else:
+        print("Hardware Check: No GPU detected (running on CPU)")
+
     paths = export_agml_chat_dataset(
         dataset_names=datasets,
         output_dir=args.output_dir,

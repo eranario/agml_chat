@@ -36,11 +36,20 @@ def _infer_lora_target_modules(model: torch.nn.Module) -> list[str]:
             linear_leaf_names.add(name.rsplit(".", 1)[-1])
         elif getattr(module, "linear", None) is not None and isinstance(module.linear, torch.nn.Linear):
             # Gracefully handle custom wrappers like Gemma4ClippableLinear
-            linear_leaf_names.add(name.rsplit(".", 1)[-1])
+            base_name = name.rsplit(".", 1)[-1]
+            linear_leaf_names.add(f"{base_name}.linear")
 
-    inferred = [name for name in preferred if name in linear_leaf_names]
-    if inferred:
-        return inferred
+    inferred = [name for name in preferred if name in linear_leaf_names or f"{name}.linear" in linear_leaf_names]
+    # For custom wrappers, if the base name was preferred, ensure we target the `.linear` leaf
+    final_inferred = []
+    for pref in inferred:
+        if f"{pref}.linear" in linear_leaf_names:
+            final_inferred.append(f"{pref}.linear")
+        else:
+            final_inferred.append(pref)
+
+    if final_inferred:
+        return final_inferred
 
     fallback = sorted(name for name in linear_leaf_names if name not in excluded)
     if fallback:
@@ -102,7 +111,7 @@ def _looks_like_legacy_lora_full_checkpoint(path: Path) -> bool:
     return False
 
 
-def _resolve_base_model_for_adapter(model_name: str) -> tuple[str, str | None]:
+def _resolve_base_model_for_adapter(model_name: str, token: str | None = None) -> tuple[str, str | None]:
     """Return (base_model_name, adapter_path) when model_name points to a PEFT adapter."""
     path = Path(model_name)
     adapter_config_path = path / "adapter_config.json"
@@ -110,7 +119,7 @@ def _resolve_base_model_for_adapter(model_name: str) -> tuple[str, str | None]:
     # Fast-path: local adapter directories with adapter_config.json present.
     if path.exists() and path.is_dir() and adapter_config_path.exists():
         try:
-            peft_cfg = PeftConfig.from_pretrained(str(path))
+            peft_cfg = PeftConfig.from_pretrained(str(path), token=token)
         except Exception as exc:
             raise ValueError(f"Failed to parse adapter config at {adapter_config_path}: {exc}") from exc
 
@@ -132,7 +141,7 @@ def _resolve_base_model_for_adapter(model_name: str) -> tuple[str, str | None]:
 
     # Fallback: handle adapter repos on the Hub (or cached adapters) by probing PEFT config.
     try:
-        peft_cfg = PeftConfig.from_pretrained(model_name)
+        peft_cfg = PeftConfig.from_pretrained(model_name, token=token)
     except Exception:
         return model_name, None
 
@@ -150,8 +159,9 @@ def load_model_and_processor(
     runtime: RuntimeConfig,
     use_flash_attention: bool,
     trust_remote_code: bool = True,
+    token: str | None = None,
 ) -> tuple[torch.nn.Module, Any, ModelFamily]:
-    base_model_name, adapter_path = _resolve_base_model_for_adapter(model_name)
+    base_model_name, adapter_path = _resolve_base_model_for_adapter(model_name, token=token)
     logging.info(
         "Model resolution: input=%s base=%s adapter=%s",
         model_name,
@@ -166,7 +176,7 @@ def load_model_and_processor(
     last_processor_exc: Exception | None = None
     for source in processor_sources:
         try:
-            processor = AutoProcessor.from_pretrained(source, trust_remote_code=trust_remote_code)
+            processor = AutoProcessor.from_pretrained(source, trust_remote_code=trust_remote_code, token=token)
             break
         except Exception as exc:
             last_processor_exc = exc
@@ -178,6 +188,7 @@ def load_model_and_processor(
     model_kwargs = {
         "torch_dtype": runtime.torch_dtype,
         "trust_remote_code": trust_remote_code,
+        "token": token,
     }
 
     # Attention implementation is optional for some model classes.
@@ -196,7 +207,7 @@ def load_model_and_processor(
         model = AutoModelForCausalLM.from_pretrained(base_model_name, **model_kwargs)
 
     if adapter_path is not None:
-        model = PeftModel.from_pretrained(model, adapter_path)
+        model = PeftModel.from_pretrained(model, adapter_path, token=token)
 
     if runtime.device == "cuda":
         model = model.to("cuda")
@@ -241,15 +252,12 @@ def maybe_wrap_lora(
         use_rslora=False,
     )
     try:
-        # Before we wrap the model with LoRA, explicitly unwrap custom Gemma 4 
-        # layer abstractions so PEFT only sees the raw torch.nn.Linear modules.
-        # This prevents PEFT from throwing a validation error on Unsupported Modules.
-        for name, module in list(model.named_modules()):
-            if getattr(module, "linear", None) is not None and isinstance(module.linear, torch.nn.Linear):
-               parent_name, child_name = name.rsplit(".", 1) if "." in name else (None, name)
-               if parent_name:
-                   parent = model.get_submodule(parent_name)
-                   setattr(parent, child_name, module.linear)
+        # Note: Do NOT explicitly unwrap custom Gemma 4 layer abstractions here.
+        # Mutating the module tree removes `Gemma4ClippableLinear`, causing 
+        # checkpoint saves to permanently lose the correct Hugging Face key paths 
+        # (e.g. they save `o_proj.weight` instead of `o_proj.linear.weight`).
+        # The auto-inferrer `_infer_lora_target_modules` now natively targets 
+        # `q_proj.linear` natively, so PEFT never throws Unsupported Module errors!
 
         wrapped = get_peft_model(model, config)
     except ValueError as exc:
