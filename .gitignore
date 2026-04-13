@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 .pytest_cache/
 .rpt2_cache/
-runs/*/checkpoint-*/
-runs/*/final/
+runs/*
 data/*
+outputs/*
+test_*
+.github/*

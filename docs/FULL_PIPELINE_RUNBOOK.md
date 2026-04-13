@@ -82,7 +82,23 @@ If this fails, check:
 tail -n 120 runs/*/logs/flash_attn_install.log
 ```
 
-## 3) Fallback run (allow SDPA if FlashAttention cannot be built)
+## 4) Manual Checkpoint Resumption (Soft Resume)
+
+If a training job was preempted or you need to recover a specific run that crashed due to PyTorch optimizer state mismatch errors, you can resume it manually by setting the exact same hyperparameter flags, keeping the same `RUN_TAG`, and adding `SOFT_RESUME=1` alongside `SKIP_ENV_SETUP=1`.
+
+```bash
+cd ~/agml_chat
+RUN_TAG=1775671942 \
+MODEL="google/gemma-4-E2B-it" \
+LORA_R=64 \
+LORA_ALPHA=128 \
+LEARNING_RATE=1e-4 \
+SKIP_ENV_SETUP=1 \
+SOFT_RESUME=1 \
+bash runs/full_pipeline.sh
+```
+
+**Note:** `SOFT_RESUME=1` safely moves `optimizer.pt` out of the way before the trainer attempts to load it, allowing the run to recover the model weights and progress while avoiding dimension mismatch crashes. `SKIP_ENV_SETUP=1` skips the `uv` environment synchronization, bypassing race conditions if running across multiple worker nodes in a farm.
 
 ```bash
 cd ~/agml_chat

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# End-to-end remote pipeline for Lambda Labs GPU boxes.
-#
 # Usage:
 #   bash runs/full_pipeline.sh
 #
@@ -19,6 +17,7 @@ REPO_DIR="${REPO_DIR:-$(pwd)}"
 UPDATE_REPO="${UPDATE_REPO:-0}"
 GIT_REF="${GIT_REF:-}"
 LOCK_MODE="${LOCK_MODE:-frozen}" # frozen|refresh
+SKIP_ENV_SETUP="${SKIP_ENV_SETUP:-0}" # If 1, skips uv sync, pip installs, and torch repair
 MODEL="${MODEL:-Qwen/Qwen2.5-VL-3B-Instruct}"
 DATASETS="${DATASETS:-plant_village_classification}"
 PROMPT_CONFIG="${PROMPT_CONFIG:-configs/prompt_config.example.yaml}"
@@ -49,6 +48,7 @@ PER_DEVICE_TRAIN_BATCH_SIZE="${PER_DEVICE_TRAIN_BATCH_SIZE:-1}"
 GRAD_ACCUM="${GRAD_ACCUM:-8}"
 LOGGING_STEPS="${LOGGING_STEPS:-5}"
 SAVE_STEPS="${SAVE_STEPS:-100}"
+EVAL_STEPS="${EVAL_STEPS:-1000}"
 MAX_LENGTH="${MAX_LENGTH:-2048}"
 LEARNING_RATE="${LEARNING_RATE:-2e-5}"
 WARMUP_RATIO="${WARMUP_RATIO:-0.03}"
@@ -98,17 +98,19 @@ if ! command -v uv >/dev/null 2>&1; then
   export PATH="${HOME}/.local/bin:${PATH}"
 fi
 
-echo "[3/7] Syncing environment"
-if [[ "${LOCK_MODE}" == "refresh" ]]; then
-  uv lock
-  uv sync --extra gpu --group dev
-else
-  uv sync --frozen --extra gpu --group dev
-fi
+if [[ "${SKIP_ENV_SETUP}" != "1" ]]; then
+  echo "[3/7] Syncing environment"
+  if [[ "${LOCK_MODE}" == "refresh" ]]; then
+    uv lock
+    uv sync --extra gpu --group dev
+  else
+    uv sync --frozen --extra gpu --group dev
+  fi
 
-if [[ "${GEMMA4_TRANSFORMERS_SOURCE}" == "1" || ( "${GEMMA4_TRANSFORMERS_SOURCE}" == "auto" && "${MODEL,,}" == *"gemma-4"* ) ]]; then
-  echo "[3b/7] Installing latest Transformers from source for Gemma 4 compatibility"
-  uv pip install --python "${REPO_DIR}/.venv/bin/python" --upgrade "git+https://github.com/huggingface/transformers.git"
+  if [[ "${GEMMA4_TRANSFORMERS_SOURCE}" == "1" || ( "${GEMMA4_TRANSFORMERS_SOURCE}" == "auto" && "${MODEL,,}" == *"gemma-4"* ) ]]; then
+    echo "[3b/7] Installing latest Transformers from source for Gemma 4 compatibility"
+    uv pip install --python "${REPO_DIR}/.venv/bin/python" --upgrade "git+https://github.com/huggingface/transformers.git"
+  fi
 fi
 
 VENV_PY="${REPO_DIR}/.venv/bin/python"
@@ -319,6 +321,7 @@ TRAIN_CMD=(
   --gradient-accumulation-steps "${GRAD_ACCUM}"
   --logging-steps "${LOGGING_STEPS}"
   --save-steps "${SAVE_STEPS}"
+  --eval-steps "${EVAL_STEPS}"
   --max-length "${MAX_LENGTH}"
   --learning-rate "${LEARNING_RATE}"
   --warmup-ratio "${WARMUP_RATIO}"
@@ -337,6 +340,28 @@ fi
 
 if [[ -n "${LORA_TARGET_MODULES}" ]]; then
   TRAIN_CMD+=(--lora-target-modules "${LORA_TARGET_MODULES}")
+fi
+
+LATEST_CHECKPOINT=$(ls -d "${RUN_DIR}"/checkpoint-* 2>/dev/null | sort -V | tail -n 1 || true)
+if [[ -n "${LATEST_CHECKPOINT}" ]]; then
+  echo "Found existing checkpoint: ${LATEST_CHECKPOINT} - Resuming training automatically."
+  
+  if [[ "${SOFT_RESUME:-0}" == "1" ]]; then
+    if [[ -f "${LATEST_CHECKPOINT}/optimizer.pt" ]]; then
+      echo "SOFT_RESUME=1: Moving optimizer.pt to optimizer.pt.bak to avoid state dict mismatch."
+      mv "${LATEST_CHECKPOINT}/optimizer.pt" "${LATEST_CHECKPOINT}/optimizer.pt.bak"
+    fi
+    if [[ -f "${LATEST_CHECKPOINT}/scaler.pt" ]]; then
+      echo "SOFT_RESUME=1: Moving scaler.pt to scaler.pt.bak."
+      mv "${LATEST_CHECKPOINT}/scaler.pt" "${LATEST_CHECKPOINT}/scaler.pt.bak"
+    fi
+    if [[ -f "${LATEST_CHECKPOINT}/scheduler.pt" ]]; then
+      echo "SOFT_RESUME=1: Moving scheduler.pt to scheduler.pt.bak."
+      mv "${LATEST_CHECKPOINT}/scheduler.pt" "${LATEST_CHECKPOINT}/scheduler.pt.bak"
+    fi
+  fi
+  
+  TRAIN_CMD+=(--resume-from-checkpoint "${LATEST_CHECKPOINT}")
 fi
 
 if [[ "${NO_FLASH_ATTN}" == "1" ]]; then

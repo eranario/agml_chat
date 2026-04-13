@@ -1,4 +1,4 @@
-# Chat Usage Guide (CLI and Web UI)
+****# Chat Usage Guide (CLI and Web UI)
 
 This guide explains how to run chat inference in two modes:
 

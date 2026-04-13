@@ -34,6 +34,9 @@ def _infer_lora_target_modules(model: torch.nn.Module) -> list[str]:
     for name, module in model.named_modules():
         if isinstance(module, torch.nn.Linear):
             linear_leaf_names.add(name.rsplit(".", 1)[-1])
+        elif getattr(module, "linear", None) is not None and isinstance(module.linear, torch.nn.Linear):
+            # Gracefully handle custom wrappers like Gemma4ClippableLinear
+            linear_leaf_names.add(name.rsplit(".", 1)[-1])
 
     inferred = [name for name in preferred if name in linear_leaf_names]
     if inferred:
@@ -235,8 +238,19 @@ def maybe_wrap_lora(
         lora_dropout=dropout,
         target_modules=target_modules,
         task_type="CAUSAL_LM",
+        use_rslora=False,
     )
     try:
+        # Before we wrap the model with LoRA, explicitly unwrap custom Gemma 4 
+        # layer abstractions so PEFT only sees the raw torch.nn.Linear modules.
+        # This prevents PEFT from throwing a validation error on Unsupported Modules.
+        for name, module in list(model.named_modules()):
+            if getattr(module, "linear", None) is not None and isinstance(module.linear, torch.nn.Linear):
+               parent_name, child_name = name.rsplit(".", 1) if "." in name else (None, name)
+               if parent_name:
+                   parent = model.get_submodule(parent_name)
+                   setattr(parent, child_name, module.linear)
+
         wrapped = get_peft_model(model, config)
     except ValueError as exc:
         message = str(exc)
