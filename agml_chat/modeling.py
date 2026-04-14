@@ -191,6 +191,10 @@ def load_model_and_processor(
     except Exception:
         config = None
 
+    if config is None and "gemma" in base_model_name.lower():
+        logging.warning("Gemma model detected but config failed to load. Forcing SDPA to prevent FlashAttention 2 head dimension overflow.")
+        use_flash_attention = False
+
     attention_impl = resolve_attention_implementation(runtime.device, use_flash_attention, config=config)
     model_kwargs = {
         "torch_dtype": runtime.torch_dtype,

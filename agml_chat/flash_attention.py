@@ -23,10 +23,13 @@ def resolve_attention_implementation(device: str, use_flash_attention: bool, con
         if config is not None:
             # Fallback to computing from hidden_size and num_attention_heads if head_dim is missing
             head_dim = getattr(config, "head_dim", getattr(config, "hidden_size", 0) // getattr(config, "num_attention_heads", 1))
+            global_head_dim = getattr(config, "global_head_dim", 0)
+            max_head_dim = max(head_dim, global_head_dim)
+            
             # Flash Attention 2 strictly only supports up to head dim 256
-            if head_dim > 256:
+            if max_head_dim > 256:
                 logging.warning(
-                    f"Model head dimension ({head_dim}) > 256, which FlashAttention 2 does not support. "
+                    f"Model head dimension ({max_head_dim}) > 256, which FlashAttention 2 does not support. "
                     "Automatically falling back to SDPA."
                 )
                 return "sdpa"
