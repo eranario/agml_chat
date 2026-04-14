@@ -125,12 +125,51 @@ fi
 echo "[4/7] Verifying runtime deps (torch/torchvision)"
 verify_torch_stack() {
   "${VENV_PY}" - <<'PY'
+import sys
 import torch
 import torchvision
-print(
-    f"torch={torch.__version__} torch_cuda={torch.version.cuda} "
-    f"torchvision={torchvision.__version__} cuda_available={torch.cuda.is_available()}"
-)
+import subprocess
+import re
+
+cuda_available = torch.cuda.is_available()
+torch_cuda_ver = torch.version.cuda
+
+print(f"torch={torch.__version__} torch_cuda={torch_cuda_ver} torchvision={torchvision.__version__} cuda_available={cuda_available}")
+
+if not cuda_available:
+    sys.exit(1)
+
+# Check actual system NVCC version to ensure compatibility with flash-attention source builds
+import subprocess
+sys_cuda = None
+try:
+    nvcc_out = subprocess.check_output(["nvcc", "--version"]).decode()
+    match = re.search(r"release (\d+\.\d+)", nvcc_out)
+    if match:
+        sys_cuda = match.group(1)
+except Exception:
+    pass
+
+if not sys_cuda:
+    try:
+        smi_out = subprocess.check_output(["nvidia-smi"]).decode()
+        match = re.search(r"CUDA Version:\s*(\d+\.\d+)", smi_out)
+        if match:
+            sys_cuda = match.group(1)
+    except Exception:
+        pass
+
+if sys_cuda and torch_cuda_ver:
+    sys_major, sys_minor = map(int, sys_cuda.split("."))
+    torch_major, torch_minor = map(int, torch_cuda_ver.split("."))
+    
+    # If Torch major version is different (e.g. Torch 11 vs System 12)
+    # Flash Attention will definitely fail to compile. Force a repair.
+    if sys_major != torch_major:
+        print(f"Mismatch detected! System CUDA: {sys_cuda}, PyTorch CUDA: {torch_cuda_ver}")
+        sys.exit(1)
+
+sys.exit(0)
 PY
 }
 
@@ -226,23 +265,50 @@ except Exception:
 PY
 }
 
-detect_cuda_wheel_tag_from_torch() {
+detect_cuda_wheel_tag_from_system() {
   "${VENV_PY}" - <<'PY'
-try:
-    import torch
-except Exception:
-    print("")
-    raise SystemExit(0)
+import sys
+import subprocess
+import re
 
-cuda = torch.version.cuda
-if not cuda:
-    print("")
-else:
-    parts = cuda.split(".")
-    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-        print(f"cu{parts[0]}{parts[1]}")
+cuda_ver = None
+try:
+    nvcc_out = subprocess.check_output(["nvcc", "--version"]).decode()
+    match = re.search(r"release (\d+)\.(\d+)", nvcc_out)
+    if match:
+        cuda_ver = f"cu{match.group(1)}{match.group(2)}"
+except Exception:
+    pass
+
+if not cuda_ver:
+    try:
+        smi_out = subprocess.check_output(["nvidia-smi"]).decode()
+        match = re.search(r"CUDA Version:\s*(\d+)\.(\d+)", smi_out)
+        if match:
+            cuda_ver = f"cu{match.group(1)}{match.group(2)}"
+    except Exception:
+        pass
+
+if cuda_ver:
+    major = int(cuda_ver[2:4])
+    minor = int(cuda_ver[4:])
+    # PyTorch wheels up to 2.5/2.6 usually only support cu124 or cu121.
+    # cu128 doesn't exist yet for standard torch.
+    if major == 12:
+        if minor >= 4:
+            print("cu124")
+        elif minor >= 1:
+            print("cu121")
+        else:
+            print("cu118") # Fallback
+    elif major == 11:
+        print("cu118")
     else:
-        print("")
+        print(cuda_ver)
+else:
+    print("")
+
+sys.exit(0)
 PY
 }
 
@@ -251,11 +317,11 @@ if ! verify_torch_stack; then
   if [[ "${AUTO_FIX_TORCH_STACK}" == "1" ]]; then
     REPAIR_WHEEL_TAG="${GPU_WHEEL_TAG}"
     if [[ "${REPAIR_WHEEL_TAG}" == "auto" ]]; then
-      DETECTED_TAG="$(detect_cuda_wheel_tag_from_torch || true)"
+      DETECTED_TAG="$(detect_cuda_wheel_tag_from_system || true)"
       if [[ -n "${DETECTED_TAG}" ]]; then
         REPAIR_WHEEL_TAG="${DETECTED_TAG}"
       else
-        REPAIR_WHEEL_TAG="cu128"
+        REPAIR_WHEEL_TAG="cu124"
       fi
     fi
 
