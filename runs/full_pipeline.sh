@@ -136,8 +136,11 @@ PY
 
 is_flash_attn_installed() {
   "${VENV_PY}" - <<'PY'
-import importlib.util
-print("1" if importlib.util.find_spec("flash_attn") is not None else "0")
+try:
+    import flash_attn
+    print("1")
+except Exception:
+    print("0")
 PY
 }
 
@@ -158,9 +161,13 @@ try_install_flash_attn() {
   if [[ -n "${FLASH_ATTN_WHEEL_URL:-}" ]]; then
     echo "Installing flash-attn from pre-built wheel URL: ${FLASH_ATTN_WHEEL_URL}" | tee -a "${FLASH_ATTN_LOG}"
     if uv pip install --python "${VENV_PY}" "${FLASH_ATTN_WHEEL_URL}" >>"${FLASH_ATTN_LOG}" 2>&1; then
-      return 0
+      if [[ "$(is_flash_attn_installed)" == "1" ]]; then
+        return 0
+      fi
+      echo "Pre-built wheel installed but failed to import (usually a PyTorch/CUDA mismatch). Uninstalling wheel..." | tee -a "${FLASH_ATTN_LOG}"
+      uv pip uninstall --python "${VENV_PY}" flash-attn >>"${FLASH_ATTN_LOG}" 2>&1 || true
     fi
-    echo "Pre-built wheel installation failed. Falling back..." | tee -a "${FLASH_ATTN_LOG}"
+    echo "Pre-built wheel attempt failed. Falling back..." | tee -a "${FLASH_ATTN_LOG}"
   fi
 
   if [[ "${FLASH_ATTN_FORCE_BUILD}" == "1" ]]; then
