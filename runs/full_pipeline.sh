@@ -42,6 +42,8 @@ VAL_RATIO="${VAL_RATIO:-0.1}"
 TEST_RATIO="${TEST_RATIO:-0.0}"
 SEED="${SEED:-42}"
 MAX_SAMPLES_PER_DATASET="${MAX_SAMPLES_PER_DATASET:-}"
+MAX_TRAIN_SAMPLES="${MAX_TRAIN_SAMPLES:-}"
+MAX_EVAL_SAMPLES="${MAX_EVAL_SAMPLES:-}"
 
 EPOCHS="${EPOCHS:-1}"
 PER_DEVICE_TRAIN_BATCH_SIZE="${PER_DEVICE_TRAIN_BATCH_SIZE:-1}"
@@ -334,6 +336,14 @@ TRAIN_CMD=(
   --lora-alpha "${LORA_ALPHA}"
   --lora-dropout "${LORA_DROPOUT}"
 )
+
+if [[ -n "${MAX_TRAIN_SAMPLES}" ]]; then
+  TRAIN_CMD+=(--max-train-samples "${MAX_TRAIN_SAMPLES}")
+fi
+
+if [[ -n "${MAX_EVAL_SAMPLES}" ]]; then
+  TRAIN_CMD+=(--max-eval-samples "${MAX_EVAL_SAMPLES}")
+fi
 
 if [[ -f "${VAL_JSONL}" ]]; then
   TRAIN_CMD+=(--val-jsonl "${VAL_JSONL}")
