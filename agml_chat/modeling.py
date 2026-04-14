@@ -8,7 +8,7 @@ from typing import Any
 import torch
 from peft import LoraConfig, PeftConfig, PeftModel, get_peft_model
 import transformers
-from transformers import AutoModelForCausalLM, AutoProcessor
+from transformers import AutoModelForCausalLM, AutoProcessor, AutoConfig
 
 from agml_chat.chat_template_adapter import ModelFamily, detect_model_family
 from agml_chat.common import RuntimeConfig
@@ -184,7 +184,14 @@ def load_model_and_processor(
         assert last_processor_exc is not None
         raise last_processor_exc
 
-    attention_impl = resolve_attention_implementation(runtime.device, use_flash_attention)
+    try:
+        config = AutoConfig.from_pretrained(
+            base_model_name, trust_remote_code=trust_remote_code, token=token
+        )
+    except Exception:
+        config = None
+
+    attention_impl = resolve_attention_implementation(runtime.device, use_flash_attention, config=config)
     model_kwargs = {
         "torch_dtype": runtime.torch_dtype,
         "trust_remote_code": trust_remote_code,
