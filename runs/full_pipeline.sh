@@ -9,7 +9,7 @@ set -euo pipefail
 #   TRAIN_RATIO=1.0 VAL_RATIO=0.0 TEST_RATIO=0.0 bash runs/full_pipeline.sh
 #   LIVE_METRICS=1 LIVE_METRICS_EVERY_N_LOGS=1 bash runs/full_pipeline.sh
 #   START_WEB=1 HOST=0.0.0.0 PORT=8000 bash runs/full_pipeline.sh
-#   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=2.11.0 GPU_TORCHVISION_VERSION=0.26.0 bash runs/full_pipeline.sh
+#   AUTO_FIX_TORCH_STACK=1 GPU_WHEEL_TAG=auto GPU_TORCH_VERSION=auto GPU_TORCHVISION_VERSION=auto bash runs/full_pipeline.sh
 #   INSTALL_FLASH_ATTN=1 STRICT_FLASH_ATTN=1 FLASH_ATTN_FORCE_BUILD=0 FLASH_ATTN_NO_DEPS=1 bash runs/full_pipeline.sh
 #   GEMMA4_TRANSFORMERS_SOURCE=1 MODEL=google/gemma-4-E2B-it bash runs/full_pipeline.sh
 
@@ -23,8 +23,8 @@ DATASETS="${DATASETS:-plant_village_classification}"
 PROMPT_CONFIG="${PROMPT_CONFIG:-configs/prompt_config.example.yaml}"
 AUTO_FIX_TORCH_STACK="${AUTO_FIX_TORCH_STACK:-1}"
 GPU_WHEEL_TAG="${GPU_WHEEL_TAG:-auto}" # auto|cu128|cu130|...
-GPU_TORCH_VERSION="${GPU_TORCH_VERSION:-2.11.0}"
-GPU_TORCHVISION_VERSION="${GPU_TORCHVISION_VERSION:-0.26.0}"
+GPU_TORCH_VERSION="${GPU_TORCH_VERSION:-auto}"
+GPU_TORCHVISION_VERSION="${GPU_TORCHVISION_VERSION:-auto}"
 INSTALL_FLASH_ATTN="${INSTALL_FLASH_ATTN:-1}"
 STRICT_FLASH_ATTN="${STRICT_FLASH_ATTN:-1}"
 FLASH_ATTN_FORCE_BUILD="${FLASH_ATTN_FORCE_BUILD:-0}"
@@ -327,10 +327,17 @@ if ! verify_torch_stack; then
 
     echo "Attempting repair with matching CUDA wheels (${REPAIR_WHEEL_TAG}) ..."
     uv pip uninstall --python "${VENV_PY}" torch torchvision || true
-    uv pip install --python "${VENV_PY}" \
-      --index-url "https://download.pytorch.org/whl/${REPAIR_WHEEL_TAG}" \
-      "torch==${GPU_TORCH_VERSION}+${REPAIR_WHEEL_TAG}" \
-      "torchvision==${GPU_TORCHVISION_VERSION}+${REPAIR_WHEEL_TAG}"
+    
+    if [ "${GPU_TORCH_VERSION}" = "auto" ]; then
+      uv pip install --python "${VENV_PY}" \
+        --index-url "https://download.pytorch.org/whl/${REPAIR_WHEEL_TAG}" \
+        torch torchvision
+    else
+      uv pip install --python "${VENV_PY}" \
+        --index-url "https://download.pytorch.org/whl/${REPAIR_WHEEL_TAG}" \
+        "torch==${GPU_TORCH_VERSION}+${REPAIR_WHEEL_TAG}" \
+        "torchvision==${GPU_TORCHVISION_VERSION}+${REPAIR_WHEEL_TAG}"
+    fi
     verify_torch_stack
   else
     echo "Set AUTO_FIX_TORCH_STACK=1 to auto-repair torch/torchvision mismatch." >&2
