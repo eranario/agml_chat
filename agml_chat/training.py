@@ -55,6 +55,7 @@ class TrainConfig:
     save_total_limit: int = 3
 
     gradient_checkpointing: bool = True
+    run_eval_inference: bool = False
 
     use_lora: bool = True
     lora_r: int = 16
@@ -500,3 +501,64 @@ def run_training(config: TrainConfig) -> None:
         logging.info("Saved full model artifacts to %s", final_dir)
 
     processor.save_pretrained(final_dir)
+
+    if getattr(config, "run_eval_inference", False) and getattr(config, "val_jsonl", None):
+        logging.info("Running evaluation text generation on the validation set...")
+        from agml_chat.engine import ChatEngine
+        import csv
+
+        engine = ChatEngine(
+            model=model_to_save,
+            processor=processor,
+            runtime=runtime,
+            model_family=model_family,
+        )
+        engine.model.eval()
+
+        val_records = VisionChatJsonlDataset(config.val_jsonl)
+        if config.max_eval_samples is not None:
+            from torch.utils.data import Subset
+            indices = list(range(min(len(val_records), config.max_eval_samples)))
+            val_records = Subset(val_records, indices)
+            
+        eval_csv_path = Path(config.output_dir) / "eval_predictions.csv"
+        logging.info("Writing validation generations to %s", eval_csv_path)
+
+        with open(eval_csv_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["image_path", "prompt", "actual", "predicted", "match"])
+            
+            for item in val_records:
+                messages = item.get("messages", [])
+                image_path = item.get("image_path", "")
+                
+                user_msg = messages[0]["content"] if len(messages) > 0 else ""
+                actual_reply = messages[-1]["content"] if len(messages) > 1 else ""
+                
+                prompt = ""
+                if isinstance(user_msg, list):
+                    for c in user_msg:
+                        if c["type"] == "text":
+                            prompt += c["text"]
+                else:
+                    prompt = str(user_msg)
+                    
+                actual = ""
+                if isinstance(actual_reply, list):
+                    for c in actual_reply:
+                        if c["type"] == "text":
+                            actual += c["text"]
+                else:
+                    actual = str(actual_reply)
+                
+                try:
+                    predicted = engine.generate(
+                        prompt=prompt.strip(),
+                        image_path=image_path,
+                    )
+                    
+                    match = "TRUE" if actual.strip().lower() == predicted.strip().lower() else "FALSE"
+                    writer.writerow([image_path, prompt.strip(), actual.strip(), predicted.strip(), match])
+                except Exception as e:
+                    logging.exception("Inference failed for %s: %s", image_path, e)
+                    writer.writerow([image_path, prompt.strip(), actual.strip(), f"ERROR: {e}", "FALSE"])

@@ -18,4 +18,5 @@ uv run -m scripts.chat_sft \
   --output-dir runs/sft_qwen25vl3b \
   --epochs 1 \
   --per-device-train-batch-size 1 \
-  --gradient-accumulation-steps 8
+  --gradient-accumulation-steps 8 \
+  --run-eval-inference

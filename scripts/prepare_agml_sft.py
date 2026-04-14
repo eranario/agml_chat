@@ -58,8 +58,8 @@ def _print_sample_prompt_and_answer(paths: dict[str, str]) -> None:
         print(f"- split: {split_name}")
         print("- prompt:")
         print(user_prompt)
-        print("- expected answer:")
-        print(assistant_answer)
+        # print("- expected answer:")
+        # print(assistant_answer)
         return
 
     print("\nSample training record: none found in exported split files.")
@@ -86,6 +86,12 @@ def main() -> None:
         default=None,
         help="Optional cap per dataset before splitting",
     )
+    parser.add_argument(
+        "--no-species-specific-options",
+        action="store_false",
+        dest="species_specific_options",
+        help="Do not limit multiple choice options to the specific crop type in the image",
+    )
     args = parser.parse_args()
     from agml_chat.agml_data import SplitRatios, export_agml_chat_dataset
     from agml_chat.prompts import load_prompt_set
@@ -109,6 +115,7 @@ def main() -> None:
         seed=args.seed,
         max_samples_per_dataset=args.max_samples_per_dataset,
         dataset_path=args.dataset_path,
+        species_specific_options=args.species_specific_options,
     )
 
     print("Prepared dataset files:")

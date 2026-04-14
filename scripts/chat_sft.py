@@ -64,6 +64,7 @@ def main() -> None:
     parser.add_argument("--save-total-limit", type=int, default=3)
 
     parser.add_argument("--no-gradient-checkpointing", action="store_true")
+    parser.add_argument("--run-eval-inference", action="store_true", help="Run model.generate() on the validation set after training")
     parser.add_argument("--no-metrics-export", action="store_true", help="Disable training metric CSV/chart export")
     parser.add_argument(
         "--live-metrics",
@@ -117,6 +118,7 @@ def main() -> None:
         save_steps=args.save_steps,
         save_total_limit=args.save_total_limit,
         gradient_checkpointing=not args.no_gradient_checkpointing,
+        run_eval_inference=args.run_eval_inference,
         export_metrics=not args.no_metrics_export,
         live_metrics=args.live_metrics,
         live_metrics_every_n_logs=args.live_metrics_every_n_logs,

@@ -138,7 +138,7 @@ def _create_agml_loader(dataset_name: str, dataset_path: str | None = None) -> A
         return AgMLDataLoader(dataset_name, **loader_kwargs)
 
 
-def _load_dataset_examples(dataset_name: str, dataset_path: str | None = None) -> list[AgMLExample]:
+def _load_dataset_examples(dataset_name: str, dataset_path: str | None = None, species_specific_options: bool = True) -> list[AgMLExample]:
     loader = _create_agml_loader(dataset_name, dataset_path=dataset_path)
 
     # AgML keeps a mapping of absolute image path -> class index for classification datasets.
@@ -159,6 +159,14 @@ def _load_dataset_examples(dataset_name: str, dataset_path: str | None = None) -
         label_text = sentence_lookup[label_idx]
         raw_label_text = str(class_lookup[label_idx])
         crop_type, class_name = parsed_lookup[label_idx]
+        
+        if species_specific_options:
+            example_diagnoses = _dedupe_preserving_order(
+                [parsed_lookup[idx][1] for idx in sorted(parsed_lookup) if parsed_lookup[idx][0] == crop_type]
+            )
+        else:
+            example_diagnoses = diagnoses
+
         examples.append(
             AgMLExample(
                 dataset=dataset_name,
@@ -169,7 +177,7 @@ def _load_dataset_examples(dataset_name: str, dataset_path: str | None = None) -
                 crop_type=crop_type,
                 class_name=class_name,
                 all_labels=labels,
-                all_diagnoses=diagnoses,
+                all_diagnoses=example_diagnoses,
             )
         )
     return examples
@@ -235,10 +243,15 @@ def build_agml_splits(
     seed: int = 42,
     max_samples_per_dataset: int | None = None,
     dataset_path: str | None = None,
+    species_specific_options: bool = True,
 ) -> dict[str, list[AgMLExample]]:
     merged = {"train": [], "val": [], "test": []}
     for dataset_name in dataset_names:
-        dataset_examples = _load_dataset_examples(dataset_name, dataset_path=dataset_path)
+        dataset_examples = _load_dataset_examples(
+            dataset_name, 
+            dataset_path=dataset_path, 
+            species_specific_options=species_specific_options
+        )
         if max_samples_per_dataset and len(dataset_examples) > max_samples_per_dataset:
             rng = random.Random(seed)
             dataset_examples = rng.sample(dataset_examples, max_samples_per_dataset)
@@ -343,6 +356,7 @@ def export_agml_chat_dataset(
     seed: int = 42,
     max_samples_per_dataset: int | None = None,
     dataset_path: str | None = None,
+    species_specific_options: bool = True,
 ) -> dict[str, str]:
     splits = build_agml_splits(
         dataset_names=dataset_names,
@@ -350,6 +364,7 @@ def export_agml_chat_dataset(
         seed=seed,
         max_samples_per_dataset=max_samples_per_dataset,
         dataset_path=dataset_path,
+        species_specific_options=species_specific_options,
     )
 
     ensure_dir(output_dir)

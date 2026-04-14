@@ -59,6 +59,7 @@ LORA_ALPHA="${LORA_ALPHA:-32}"
 LORA_DROPOUT="${LORA_DROPOUT:-0.05}"
 LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-}"
 NO_FLASH_ATTN="${NO_FLASH_ATTN:-0}"
+RUN_EVAL_INFERENCE="${RUN_EVAL_INFERENCE:-0}"
 NO_METRICS_EXPORT="${NO_METRICS_EXPORT:-0}"
 LIVE_METRICS="${LIVE_METRICS:-1}"
 LIVE_METRICS_EVERY_N_LOGS="${LIVE_METRICS_EVERY_N_LOGS:-1}"
@@ -297,6 +298,10 @@ if [[ -n "${MAX_SAMPLES_PER_DATASET}" ]]; then
   PREP_CMD+=(--max-samples-per-dataset "${MAX_SAMPLES_PER_DATASET}")
 fi
 
+if [[ "${SPECIES_SPECIFIC_OPTIONS:-1}" == "0" ]]; then
+  PREP_CMD+=(--no-species-specific-options)
+fi
+
 "${PREP_CMD[@]}" | tee "${LOG_DIR}/prepare.log"
 
 TRAIN_JSONL="${DATA_DIR}/train.jsonl"
@@ -366,6 +371,10 @@ fi
 
 if [[ "${NO_FLASH_ATTN}" == "1" ]]; then
   TRAIN_CMD+=(--no-flash-attn)
+fi
+
+if [[ "${RUN_EVAL_INFERENCE}" == "1" ]]; then
+  TRAIN_CMD+=(--run-eval-inference)
 fi
 
 if [[ "${NO_METRICS_EXPORT}" == "1" ]]; then
