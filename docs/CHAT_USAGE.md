@@ -21,7 +21,7 @@ source .venv/bin/activate
 Run interactive chat:
 
 ```bash
-uv run -m scripts.chat_cli \
+uv run --no-sync -m scripts.chat_cli \
   --model runs/sft_gemma4_e2b_it/final \
   --device cpu \
   --dtype float32 \
@@ -56,7 +56,7 @@ uv run -m scripts.chat_cli \
 For short jobs that should exit immediately after one answer:
 
 ```bash
-uv run -m scripts.chat_cli \
+uv run --no-sync -m scripts.chat_cli \
   --model runs/sft_gemma4_e2b_it/final \
   --device cpu \
   --single-prompt "Identify likely disease symptoms from this image." \
@@ -68,7 +68,7 @@ uv run -m scripts.chat_cli \
 Start the server:
 
 ```bash
-uv run -m scripts.chat_web \
+uv run --no-sync -m scripts.chat_web \
   --model runs/sft_gemma4_e2b_it/final \
   --host 0.0.0.0 \
   --port 8000
