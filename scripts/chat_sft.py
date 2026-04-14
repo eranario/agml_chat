@@ -128,6 +128,13 @@ def main() -> None:
         lora_dropout=args.lora_dropout,
         lora_target_modules=parse_target_modules(args.lora_target_modules),
     )
+    
+    import json
+    import os
+    os.makedirs(args.output_dir, exist_ok=True)
+    with open(os.path.join(args.output_dir, "pipeline_config.json"), "w") as f:
+        json.dump(config.__dict__, f, indent=2)
+
     run_training(config)
 
 
