@@ -149,6 +149,20 @@ try_install_flash_attn() {
   fi
 
   : > "${FLASH_ATTN_LOG}"
+  
+  if [[ -z "${FLASH_ATTN_WHEEL_URL:-}" ]]; then
+    echo "Resolving pre-built flash-attn wheel URL..." | tee -a "${FLASH_ATTN_LOG}"
+    FLASH_ATTN_WHEEL_URL="$("${VENV_PY}" scripts/resolve_flash_attn_wheel.py 2>/dev/null || true)"
+  fi
+  
+  if [[ -n "${FLASH_ATTN_WHEEL_URL:-}" ]]; then
+    echo "Installing flash-attn from pre-built wheel URL: ${FLASH_ATTN_WHEEL_URL}" | tee -a "${FLASH_ATTN_LOG}"
+    if uv pip install --python "${VENV_PY}" "${FLASH_ATTN_WHEEL_URL}" >>"${FLASH_ATTN_LOG}" 2>&1; then
+      return 0
+    fi
+    echo "Pre-built wheel installation failed. Falling back..." | tee -a "${FLASH_ATTN_LOG}"
+  fi
+
   if [[ "${FLASH_ATTN_FORCE_BUILD}" == "1" ]]; then
     echo "Installing ${pkg} (source-build mode) ..." | tee -a "${FLASH_ATTN_LOG}"
   else

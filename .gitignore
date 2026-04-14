@@ -3,7 +3,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .rpt2_cache/
-runs/*
+runs/sft_*
 data/*
 outputs/*
 test_*
